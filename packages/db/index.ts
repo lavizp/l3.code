@@ -9,3 +9,6 @@ export const Session = new mongoose.Schema({
   conversation: [Object],
   workspace: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Workspace' }]
 })
+
+export const SessionModel = mongoose.model("Session", Session)
+export const WorkspaceModel = mongoose.model("Workspace", Workspace)

@@ -10,7 +10,10 @@
     "typescript": "^6"
   },
   "dependencies": {
+    "@types/mongoose": "^5.11.97",
     "@types/ws": "^8.18.1",
+    "db": "*",
+    "mongoose": "^9.10.1",
     "ws": "^8.21.3"
   }
 }

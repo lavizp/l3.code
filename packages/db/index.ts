@@ -15,7 +15,8 @@ export const Message = new mongoose.Schema({
 
 export const Session = new mongoose.Schema({
   conversation: [Message],
-  workspace: { type: mongoose.Schema.Types.ObjectId, ref: 'Workspace' }
+  workspace: { type: mongoose.Schema.Types.ObjectId, ref: 'Workspace' },
+  anthropicSessionId: String
 })
 
 export const SessionModel = mongoose.model("Session", Session)

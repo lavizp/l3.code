@@ -1,5 +1,6 @@
 import { CreateWorkspaceSchema, CreateSessionSchema, AddMessageSchema, type IncommingMessageType, type OutgoingMessageType } from "commons/types"
 import { WorkspaceModel, SessionModel} from "db/client"
+import mongoose from "mongoose"
 import type WebSocket from "ws"
 
 export class User {
@@ -14,35 +15,42 @@ export class User {
   }
   async handleIncommingMessage(msg: IncommingMessageType): Promise<OutgoingMessageType> {
     if (msg.type === 'create-workspace') {
-      const { success, data } = CreateWorkspaceSchema.safeParse(msg)
+      const { success, data } = CreateWorkspaceSchema.safeParse(msg.payload)
       if (!success) {
         throw new Error("Incorrect Schema")
       }
+      const name: string = data.path.split("").pop()!
       const workspace = await WorkspaceModel.create({
         path: data.path,
-        name: data.path.split("").pop()
+        name: name
       })
       return {
-        id: workspace._id
+        type: 'workspace-created',
+        payload: {
+              id: workspace._id.toString(),
+              path: workspace.path!,
+              name
+          }
       }
     }
     if (msg.type === 'create-session') {
-      const { success, data } = CreateSessionSchema.safeParse(msg)
+      const { success, data } = CreateSessionSchema.safeParse(msg.payload)
       if (!success) {
         throw new Error("Incorrect Schema")
       }
       const session = await SessionModel.create({
-        workspace: {
-          ref: data.workspaceId
-        },
+        workspace: new mongoose.Types.ObjectId(data.workspaceId),
         conversation: []
       })
       return {
-        id: session._id
+        type: 'session-created',
+        payload: {
+          id: session._id.toString()
+          }
       }
     }
     if (msg.type === 'add-message') {
-      const { success, data } = AddMessageSchema.safeParse(msg)
+      const { success, data } = AddMessageSchema.safeParse(msg.payload)
       if (!success) {
         throw new Error("Incorrect Schema")
       }
@@ -59,7 +67,10 @@ export class User {
         }
       })
       return {
-        id: 1
+        type: 'message-added',
+        payload: {
+          id:"1"
+        }
       }
     }
     throw new Error("Incomming Message Flawed")

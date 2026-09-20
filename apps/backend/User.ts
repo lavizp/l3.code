@@ -19,7 +19,7 @@ export class User {
       if (!success) {
         throw new Error("Incorrect Schema")
       }
-      const name: string = data.path.split("").pop()!
+      const name: string = data.path.split("/").filter(Boolean).pop() ?? data.path
       const workspace = await WorkspaceModel.create({
         path: data.path,
         name: name
@@ -45,7 +45,8 @@ export class User {
       return {
         type: 'session-created',
         payload: {
-          id: session._id.toString()
+          id: session._id.toString(),
+          workspaceId: data.workspaceId
           }
       }
     }
@@ -54,22 +55,31 @@ export class User {
       if (!success) {
         throw new Error("Incorrect Schema")
       }
-      await SessionModel.updateOne({
-        id: data.sessionId
-      }, {
-        conversation: {
+      const session = await SessionModel.findByIdAndUpdate(
+        data.sessionId,
+        {
           $push: {
-            type: "user",
-            payload: {
-              message: data.message
+            conversation: {
+              role: "user",
+              payload: {
+                message: data.message
+              }
             }
           }
-        }
-      })
+        },
+        { new: true }
+      )
+      if (!session) {
+        throw new Error("Session not found")
+      }
+      const added = session.conversation[session.conversation.length - 1]!
       return {
         type: 'message-added',
         payload: {
-          id:"1"
+          id: added._id.toString(),
+          sessionId: data.sessionId,
+          role: "user",
+          message: data.message
         }
       }
     }

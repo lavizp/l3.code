@@ -8,7 +8,7 @@ export type CreateWorkspaceSchemaType = z.infer<typeof CreateWorkspaceSchema>
 export const CreateSessionSchema = z.object({
   workspaceId: z.string()
 })
-export type CreateSessionSchemaType = z.infer<typeof CreateWorkspaceSchema>
+export type CreateSessionSchemaType = z.infer<typeof CreateSessionSchema>
 
 export const AddMessageSchema = z.object({
   sessionId: z.string(),
@@ -16,15 +16,16 @@ export const AddMessageSchema = z.object({
 })
 export type AddMessageSchemaType = z.infer<typeof AddMessageSchema>
 
-export type IncommingMessageType = {
-  type: 'create-workspace',
-  payload: CreateWorkspaceSchemaType
+export type IncommingMessageType =
   | {
-    type: 'create-session',
-    payload: CreateSessionSchemaType
-    | {
-      type: 'add-message',
+      type: 'create-workspace'
+      payload: CreateWorkspaceSchemaType
+    }
+  | {
+      type: 'create-session'
+      payload: CreateSessionSchemaType
+    }
+  | {
+      type: 'add-message'
       payload: AddMessageSchemaType
     }
-  }
-}

@@ -29,10 +29,14 @@ export class UserManager {
     workspaces.forEach(w => {
       const finalSessions:Session[] = []
       sessions.forEach(s => {
-        if (s.workspace=== w._id) {
+        if (s.workspace?.toString() === w._id.toString()) {
           finalSessions.push({
             id: s._id.toString(),
-            messages: s.messages
+            messages: s.conversation.map(m => ({
+              id: m._id.toString(),
+              role: m.role,
+              payload: m.payload
+            })) as Session["messages"]
           })
         }
       })

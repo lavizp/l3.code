@@ -5,8 +5,12 @@ export const AppContext = createContext<{
   workspaces: Workspace[]
   socket: WebSocket | null
   setWorkspace: any
+  activeSessionId: string | null
+  setActiveSessionId: (id: string | null) => void
 }>({
   workspaces: [],
   socket: null,
-  setWorkspace: null
+  setWorkspace: null,
+  activeSessionId: null,
+  setActiveSessionId: () => {}
 })

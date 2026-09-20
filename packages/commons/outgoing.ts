@@ -8,12 +8,16 @@ export const WorkspaceCreatedSchema = z.object({
 export type WorkspaceCreatedSchemaype = z.infer<typeof WorkspaceCreatedSchema>
 
 export const SessionCreated = z.object({
-  id: z.string()
+  id: z.string(),
+  workspaceId: z.string()
 })
 export type SessionCreatedType = z.infer<typeof SessionCreated>
 
 export const MessageAdded = z.object({
-  id: z.string()
+  id: z.string(),
+  sessionId: z.string(),
+  role: z.literal("user"),
+  message: z.string()
 })
 export type MessageAddedType = z.infer<typeof MessageAdded>
 
@@ -48,7 +52,7 @@ export type Session = {
   messages: Message[]
 }
 
-type Message = {
+export type Message = {
   id: string;
   role: "user",
   payload: {

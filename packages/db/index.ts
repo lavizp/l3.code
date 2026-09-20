@@ -5,12 +5,16 @@ export const Workspace = new mongoose.Schema({
   name: String
 })
 
-export const Session = new mongoose.Schema({
+export const Message = new mongoose.Schema({
   role: {
     type: String,
-    enum:['user','assistant']
+    enum: ['user', 'assistant']
   },
-  conversation: [Object],
+  payload: Object
+}, { timestamps: true })
+
+export const Session = new mongoose.Schema({
+  conversation: [Message],
   workspace: { type: mongoose.Schema.Types.ObjectId, ref: 'Workspace' }
 })
 

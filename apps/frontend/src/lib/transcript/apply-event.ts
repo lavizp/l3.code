@@ -1,158 +1,8 @@
-import type {
-  AssistantBlock,
-  Message,
-  OutgoingMessageType,
-  ToolBlock,
-  Workspace
-} from "commons/types"
-
-export type UIMessage =
-  | { id: string; role: "user"; text: string }
-  | {
-      id: string
-      role: "assistant"
-      blocks: AssistantBlock[]
-      running: boolean
-      error?: string
-    }
-
-export type UISession = {
-  id: string
-  messages: UIMessage[]
-}
-
-/** `id` is null while a workspace we just created is awaiting its server id. */
-export type UIWorkspace = {
-  id: string | null
-  name: string
-  path: string
-  sessions: UISession[]
-}
-
-/** Id of the in-flight assistant turn, swapped for the real one when it ends. */
-export const liveId = (sessionId: string) => `live:${sessionId}`
-
-/** Marks a message drawn locally that the server hasn't confirmed yet. */
-const LOCAL_PREFIX = "local:"
-
-export const localId = () =>
-  `${LOCAL_PREFIX}${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-
-/**
- * Draw the user's own message the instant they press enter, rather than
- * waiting for the server to echo it back. The echo reconciles onto this.
- */
-export function appendLocalMessage(
-  workspaces: UIWorkspace[],
-  sessionId: string,
-  id: string,
-  text: string
-): UIWorkspace[] {
-  return mapSession(workspaces, sessionId, session => ({
-    ...session,
-    messages: [...session.messages, { id, role: "user", text }]
-  }))
-}
-
-/** Read a persisted message back into renderable form. */
-export function normalizeMessage(message: Message): UIMessage {
-  if (message.role === "user") {
-    return {
-      id: message.id,
-      role: "user",
-      text: String(message.payload?.message ?? "")
-    }
-  }
-
-  const payload = message.payload as Record<string, unknown> | undefined
-
-  if (payload && Array.isArray(payload.blocks)) {
-    return {
-      id: message.id,
-      role: "assistant",
-      blocks: payload.blocks as AssistantBlock[],
-      running: false
-    }
-  }
-
-  // Turns saved before streaming existed stored only the final text.
-  const text =
-    typeof payload?.text === "string"
-      ? payload.text
-      : typeof payload?.message === "string"
-        ? payload.message
-        : ""
-
-  return {
-    id: message.id,
-    role: "assistant",
-    blocks: text ? [{ kind: "text", id: `${message.id}:0`, text }] : [],
-    running: false
-  }
-}
-
-export function normalizeWorkspaces(workspaces: Workspace[]): UIWorkspace[] {
-  return workspaces.map(w => ({
-    id: w.id,
-    name: w.name,
-    path: w.path,
-    sessions: (w.sessions ?? []).map(s => ({
-      id: s.id,
-      messages: (s.messages ?? []).map(normalizeMessage)
-    }))
-  }))
-}
-
-/** A session's label: what the person first asked, falling back to a stub. */
-export function sessionTitle(session: UISession): string {
-  const firstUser = session.messages.find(m => m.role === "user")
-  if (firstUser && firstUser.role === "user" && firstUser.text.trim()) {
-    return firstUser.text.trim().split("\n")[0]!
-  }
-  return "New session"
-}
-
-export function isRunning(session: UISession | undefined): boolean {
-  return session?.messages.some(m => m.role === "assistant" && m.running) ?? false
-}
-
-function mapSession(
-  workspaces: UIWorkspace[],
-  sessionId: string,
-  update: (session: UISession) => UISession
-): UIWorkspace[] {
-  return workspaces.map(w => {
-    if (!w.sessions.some(s => s.id === sessionId)) {
-      return w
-    }
-    return {
-      ...w,
-      sessions: w.sessions.map(s => (s.id === sessionId ? update(s) : s))
-    }
-  })
-}
-
-/** Apply a change to the live assistant turn of a session. */
-function mapLiveTurn(
-  workspaces: UIWorkspace[],
-  sessionId: string,
-  update: (message: Extract<UIMessage, { role: "assistant" }>) => UIMessage
-): UIWorkspace[] {
-  const id = liveId(sessionId)
-  return mapSession(workspaces, sessionId, session => ({
-    ...session,
-    messages: session.messages.map(m =>
-      m.id === id && m.role === "assistant" ? update(m) : m
-    )
-  }))
-}
-
-function mapBlocks(
-  message: Extract<UIMessage, { role: "assistant" }>,
-  update: (blocks: AssistantBlock[]) => AssistantBlock[]
-): UIMessage {
-  return { ...message, blocks: update(message.blocks) }
-}
+import type { OutgoingMessageType, ToolBlock } from "commons/types"
+import { isLocalId, liveId } from "./ids"
+import { normalizeWorkspaces } from "./normalize"
+import type { UIWorkspace } from "./types"
+import { mapBlocks, mapLiveTurn, mapSession } from "./update"
 
 /**
  * Fold one server event into the workspace tree. Pure, so React state stays
@@ -177,9 +27,7 @@ export function applyEvent(
       if (pending === -1) {
         return [...workspaces, { id, name, path, sessions: [] }]
       }
-      return workspaces.map((w, i) =>
-        i === pending ? { ...w, id, name, path } : w
-      )
+      return workspaces.map((w, i) => (i === pending ? { ...w, id, name, path } : w))
     }
 
     case "session-created": {
@@ -200,7 +48,7 @@ export function applyEvent(
         // Adopt the id onto the copy we already drew locally, so the echo
         // confirms that message instead of duplicating it.
         const pending = session.messages.findIndex(
-          m => m.role === "user" && m.id.startsWith(LOCAL_PREFIX) && m.text === message
+          m => m.role === "user" && isLocalId(m.id) && m.text === message
         )
         if (pending !== -1) {
           return {
@@ -305,14 +153,7 @@ export function applyEvent(
           }
           // Always move off the live id, otherwise the next turn in this
           // session would collide with this one and never open.
-          return [
-            {
-              ...m,
-              id: id ?? `${live}:${Date.now()}`,
-              running: false,
-              error
-            }
-          ]
+          return [{ ...m, id: id ?? `${live}:${Date.now()}`, running: false, error }]
         })
       }))
     }

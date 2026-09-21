@@ -1,0 +1,63 @@
+import type { AssistantBlock } from "commons/types"
+import { liveId } from "./ids"
+import type { UIAssistantMessage, UIMessage, UISession, UIWorkspace } from "./types"
+
+/**
+ * Immutable helpers for reaching into the workspace tree. Everything that
+ * changes state goes through one of these, so a change always addresses a
+ * session by id rather than by whatever happens to be on screen.
+ */
+
+export function mapSession(
+  workspaces: UIWorkspace[],
+  sessionId: string,
+  update: (session: UISession) => UISession
+): UIWorkspace[] {
+  return workspaces.map(w => {
+    if (!w.sessions.some(s => s.id === sessionId)) {
+      return w
+    }
+    return {
+      ...w,
+      sessions: w.sessions.map(s => (s.id === sessionId ? update(s) : s))
+    }
+  })
+}
+
+/** Apply a change to the live assistant turn of a session. */
+export function mapLiveTurn(
+  workspaces: UIWorkspace[],
+  sessionId: string,
+  update: (message: UIAssistantMessage) => UIMessage
+): UIWorkspace[] {
+  const id = liveId(sessionId)
+  return mapSession(workspaces, sessionId, session => ({
+    ...session,
+    messages: session.messages.map(m =>
+      m.id === id && m.role === "assistant" ? update(m) : m
+    )
+  }))
+}
+
+export function mapBlocks(
+  message: UIAssistantMessage,
+  update: (blocks: AssistantBlock[]) => AssistantBlock[]
+): UIMessage {
+  return { ...message, blocks: update(message.blocks) }
+}
+
+/**
+ * Draw the user's own message the instant they press enter, rather than
+ * waiting for the server to echo it back. The echo reconciles onto this.
+ */
+export function appendLocalMessage(
+  workspaces: UIWorkspace[],
+  sessionId: string,
+  id: string,
+  text: string
+): UIWorkspace[] {
+  return mapSession(workspaces, sessionId, session => ({
+    ...session,
+    messages: [...session.messages, { id, role: "user", text }]
+  }))
+}

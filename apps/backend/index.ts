@@ -1,15 +1,14 @@
-import { WebSocketServer } from "ws";
 import mongoose from "mongoose"
-import { UserManager } from "./UserManager";
+// Registers the built-in agent providers. Must run before any turn does.
+import "./agents"
+import { config } from "./config"
+import { startServer } from "./transport/server"
 
-mongoose.connect(process.env.DB_URL!)
+mongoose
+  .connect(config.dbUrl)
   .then(() => {
-    const server = new WebSocketServer({ port: 8080 })
-    console.log('started')
-    server.on("connection", (ws) => {
-      UserManager.getInstance().addUser(ws)
-    })
-
+    startServer(config.port)
+    console.log(`started on :${config.port}`)
   })
   .catch(e => {
     console.log(e)

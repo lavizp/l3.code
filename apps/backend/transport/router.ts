@@ -32,10 +32,14 @@ const HANDLERS: Record<IncommingMessageType["type"], Handler> = {
     if (!success) {
       throw new Error("Incorrect Schema")
     }
-    const session = await createSession(data.workspaceId)
+    // Resolve the agent before writing anything, so an id the client made
+    // up fails the request instead of creating a session nothing can run.
+    // This is the only point at which a session's agent is decided.
+    const agent = getAgent(data.agentId)
+    const session = await createSession(data.workspaceId, agent.id)
     connection.send({
       type: "session-created",
-      payload: { id: session.id, workspaceId: data.workspaceId }
+      payload: { id: session.id, workspaceId: data.workspaceId, agentId: agent.id }
     })
   },
 
@@ -47,7 +51,6 @@ const HANDLERS: Record<IncommingMessageType["type"], Handler> = {
     await runTurn({
       sessionId: data.sessionId,
       message: data.message,
-      agent: getAgent(),
       emit: event => connection.send(event)
     })
   }

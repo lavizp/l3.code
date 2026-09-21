@@ -1,5 +1,6 @@
 import { SessionModel, WorkspaceModel } from "db/client"
 import type { Message, Session, Workspace } from "commons/types"
+import { config } from "../config"
 
 export type StoredWorkspace = {
   id: string
@@ -48,7 +49,11 @@ export async function loadWorkspaces(): Promise<Workspace[]> {
     })) as Message[]
 
     const list = sessionsByWorkspace.get(key) ?? []
-    list.push({ id: s._id.toString(), messages })
+    list.push({
+      id: s._id.toString(),
+      agentId: s.agent ?? config.defaultAgentId,
+      messages
+    })
     sessionsByWorkspace.set(key, list)
   }
 

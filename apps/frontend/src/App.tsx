@@ -19,6 +19,7 @@ export function App() {
           workspaces={agent.workspaces}
           activeSessionId={agent.activeSessionId}
           status={agent.status}
+          agents={agent.agents}
           onAddWorkspace={agent.addWorkspace}
           onSelectSession={agent.selectSession}
           onNewSession={agent.newSession}
@@ -32,7 +33,13 @@ export function App() {
 
         {session && workspace ? (
           <>
-            <SessionHeader name={workspace.name} path={workspace.path} />
+            <SessionHeader
+              name={workspace.name}
+              path={workspace.path}
+              agent={
+                agent.agents.find(a => a.id === session.agentId)?.label ?? session.agentId
+              }
+            />
             <Transcript session={session} workspacePath={workspace.path} />
             <Composer
               onSend={agent.sendMessage}

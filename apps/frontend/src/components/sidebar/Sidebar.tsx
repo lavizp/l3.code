@@ -1,4 +1,5 @@
 import { useState } from "react"
+import type { AgentSummary } from "commons/types"
 import type { ConnectionStatus as Status } from "../../hooks/useSocket"
 import type { UIWorkspace } from "../../lib/transcript"
 import { AddWorkspaceForm } from "./AddWorkspaceForm"
@@ -9,6 +10,7 @@ export function Sidebar({
   workspaces,
   activeSessionId,
   status,
+  agents,
   onAddWorkspace,
   onSelectSession,
   onNewSession
@@ -16,9 +18,10 @@ export function Sidebar({
   workspaces: UIWorkspace[]
   activeSessionId: string | null
   status: Status
+  agents: AgentSummary[]
   onAddWorkspace: (path: string) => void
   onSelectSession: (id: string) => void
-  onNewSession: (workspaceId: string) => void
+  onNewSession: (workspaceId: string, agentId: string) => void
 }) {
   const [expanded, setExpanded] = useState<string[]>([])
 
@@ -42,6 +45,7 @@ export function Sidebar({
               workspace={w}
               open={w.id !== null && expanded.includes(w.id)}
               activeSessionId={activeSessionId}
+              agents={agents}
               onToggle={() => w.id && toggle(w.id)}
               onSelectSession={onSelectSession}
               onNewSession={onNewSession}

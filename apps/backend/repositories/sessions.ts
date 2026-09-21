@@ -1,28 +1,44 @@
 import { SessionModel } from "db/client"
 import type { AssistantBlock } from "commons/types"
 import mongoose from "mongoose"
+import { config } from "../config"
+
+/**
+ * The agent whose resume id predates `agentSessions`. Rows written before
+ * sessions could pick an agent kept it in its own field, so that's still
+ * where we look for it.
+ */
+const LEGACY_AGENT_ID = "claude-code"
 
 export type StoredSession = {
   id: string
   workspaceId: string | undefined
-  /**
-   * The agent provider's own conversation id, used to resume. Persisted under
-   * the legacy `anthropicSessionId` field so existing rows keep working.
-   */
+  /** Which agent provider runs this session's turns. */
+  agentId: string
+  /** That provider's own conversation id, when there is one to resume. */
   agentSessionId: string | undefined
 }
 
-export async function createSession(workspaceId: string): Promise<StoredSession> {
+type SessionDoc = InstanceType<typeof SessionModel>
+
+export async function createSession(
+  workspaceId: string,
+  agentId: string
+): Promise<StoredSession> {
   const session = await SessionModel.create({
     workspace: new mongoose.Types.ObjectId(workspaceId),
+    agent: agentId,
     conversation: []
   })
-  return { id: session._id.toString(), workspaceId, agentSessionId: undefined }
+  return { id: session._id.toString(), workspaceId, agentId, agentSessionId: undefined }
 }
 
 /**
  * Append the user's message to a session and hand back both the session and
  * the id the message was stored under. Null when there is no such session.
+ *
+ * The session's agent is deliberately not touched: it is fixed at creation,
+ * so a turn reads it rather than setting it.
  */
 export async function appendUserMessage(
   sessionId: string,
@@ -37,14 +53,7 @@ export async function appendUserMessage(
     return null
   }
   const stored = session.conversation[session.conversation.length - 1]!
-  return {
-    session: {
-      id: session._id.toString(),
-      workspaceId: session.workspace?.toString(),
-      agentSessionId: session.anthropicSessionId ?? undefined
-    },
-    messageId: stored._id.toString()
-  }
+  return { session: readSession(session), messageId: stored._id.toString() }
 }
 
 /** Store a finished assistant turn. Returns the id it was stored under. */
@@ -61,13 +70,36 @@ export async function appendAssistantBlocks(
   return saved?._id.toString() ?? null
 }
 
-/** Remember the provider's conversation id so the next turn can resume it. */
+/**
+ * Remember a provider's conversation id so its next turn can resume it. Kept
+ * per agent, so a session that has talked to both can pick either back up.
+ */
 export async function saveAgentSessionId(
   sessionId: string,
+  agentId: string,
   agentSessionId: string
 ): Promise<void> {
   await SessionModel.updateOne(
     { _id: sessionId },
-    { $set: { anthropicSessionId: agentSessionId } }
+    { $set: { [`agentSessions.${agentId}`]: agentSessionId } }
   )
+}
+
+/** Read a session document into the shape the rest of the server works with. */
+function readSession(doc: SessionDoc): StoredSession {
+  const agentId = doc.agent ?? config.defaultAgentId
+  return {
+    id: doc._id.toString(),
+    workspaceId: doc.workspace?.toString(),
+    agentId,
+    agentSessionId: resumeIdFor(doc, agentId)
+  }
+}
+
+function resumeIdFor(doc: SessionDoc, agentId: string): string | undefined {
+  const stored = doc.agentSessions?.get(agentId)
+  if (stored) {
+    return stored
+  }
+  return agentId === LEGACY_AGENT_ID ? (doc.anthropicSessionId ?? undefined) : undefined
 }

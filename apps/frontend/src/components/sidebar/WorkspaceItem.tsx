@@ -1,10 +1,13 @@
+import type { AgentSummary } from "commons/types"
 import type { UIWorkspace } from "../../lib/transcript"
+import { NewSession } from "./NewSession"
 import { SessionRow } from "./SessionRow"
 
 export function WorkspaceItem({
   workspace,
   open,
   activeSessionId,
+  agents,
   onToggle,
   onSelectSession,
   onNewSession
@@ -12,9 +15,10 @@ export function WorkspaceItem({
   workspace: UIWorkspace
   open: boolean
   activeSessionId: string | null
+  agents: AgentSummary[]
   onToggle: () => void
   onSelectSession: (id: string) => void
-  onNewSession: (workspaceId: string) => void
+  onNewSession: (workspaceId: string, agentId: string) => void
 }) {
   // A workspace we just created has no server id yet, so it can't be opened.
   const pending = workspace.id === null
@@ -62,12 +66,10 @@ export function WorkspaceItem({
               onSelect={() => onSelectSession(session.id)}
             />
           ))}
-          <button
-            className="w-full px-2 py-1.5 text-left font-mono text-[12px] text-dim hover:text-ink"
-            onClick={() => workspace.id && onNewSession(workspace.id)}
-          >
-            + New session
-          </button>
+          <NewSession
+            agents={agents}
+            onCreate={agentId => workspace.id && onNewSession(workspace.id, agentId)}
+          />
         </div>
       )}
     </div>

@@ -9,7 +9,8 @@ export type WorkspaceCreatedSchemaype = z.infer<typeof WorkspaceCreatedSchema>
 
 export const SessionCreated = z.object({
   id: z.string(),
-  workspaceId: z.string()
+  workspaceId: z.string(),
+  agentId: z.string()
 })
 export type SessionCreatedType = z.infer<typeof SessionCreated>
 
@@ -61,6 +62,8 @@ export type OutgoingMessageType =
   | {
       type: 'init'
       workspaces: Workspace[]
+      /** The agents to choose between when starting a session. */
+      agents: AgentSummary[]
   }
   /** The agent picked up the turn. The client opens a live assistant message. */
   | {
@@ -122,7 +125,15 @@ export type Workspace = {
 
 export type Session = {
   id: string,
+  /** The agent that runs this session's turns. Fixed when it was created. */
+  agentId: string,
   messages: Message[]
+}
+
+/** One agent a client may choose between. */
+export type AgentSummary = {
+  id: string
+  label: string
 }
 
 export type Message = {

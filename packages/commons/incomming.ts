@@ -6,7 +6,12 @@ export const CreateWorkspaceSchema = z.object({
 export type CreateWorkspaceSchemaType = z.infer<typeof CreateWorkspaceSchema>
 
 export const CreateSessionSchema = z.object({
-  workspaceId: z.string()
+  workspaceId: z.string(),
+  /**
+   * Which agent runs this session, for its whole life. Omitted means the
+   * server default; it cannot be changed once the session exists.
+   */
+  agentId: z.string().optional()
 })
 export type CreateSessionSchemaType = z.infer<typeof CreateSessionSchema>
 

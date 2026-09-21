@@ -1,6 +1,7 @@
 import type { IncommingMessageType } from "commons/types"
 import { WebSocketServer } from "ws"
 import { uuid } from "uuidv4"
+import { listAgents } from "../agents"
 import { loadWorkspaces } from "../repositories/workspaces"
 import { Connection } from "./connection"
 import { routeMessage } from "./router"
@@ -50,7 +51,11 @@ export function startServer(port: number): WebSocketServer {
 /** Everything the client needs to draw the app on connect. */
 async function sendInitialState(connection: Connection): Promise<void> {
   try {
-    connection.send({ type: "init", workspaces: await loadWorkspaces() })
+    connection.send({
+      type: "init",
+      workspaces: await loadWorkspaces(),
+      agents: listAgents()
+    })
   } catch (e) {
     console.error("Failed to load workspaces:", e)
     connection.send({

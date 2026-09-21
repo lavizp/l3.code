@@ -1,3 +1,4 @@
+import type { AgentSummary } from "commons/types"
 import { config } from "../config"
 import type { AgentProvider } from "./types"
 
@@ -12,13 +13,13 @@ export function registerAgent(provider: AgentProvider): void {
 export function getAgent(id: string = config.defaultAgentId): AgentProvider {
   const provider = providers.get(id)
   if (!provider) {
-    throw new Error(
-      `Unknown agent provider "${id}". Registered: ${listAgents().join(", ") || "none"}`
-    )
+    const known = listAgents().map(a => a.id).join(", ")
+    throw new Error(`Unknown agent provider "${id}". Registered: ${known || "none"}`)
   }
   return provider
 }
 
-export function listAgents(): string[] {
-  return [...providers.keys()]
+/** Every agent a client may pick from, in registration order. */
+export function listAgents(): AgentSummary[] {
+  return [...providers.values()].map(({ id, label }) => ({ id, label }))
 }

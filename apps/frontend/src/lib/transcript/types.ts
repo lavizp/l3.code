@@ -14,6 +14,8 @@ export type UIAssistantMessage = Extract<UIMessage, { role: "assistant" }>
 
 export type UISession = {
   id: string
+  /** The agent running this session, fixed when it was created. */
+  agentId: string
   messages: UIMessage[]
 }
 

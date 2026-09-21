@@ -1,4 +1,5 @@
 import { query } from "@anthropic-ai/claude-agent-sdk"
+import { stringifyToolResult } from "./tool-result"
 import type { AgentEvent, AgentProvider, AgentRunOptions } from "./types"
 
 /**
@@ -9,6 +10,7 @@ import type { AgentEvent, AgentProvider, AgentRunOptions } from "./types"
  */
 export const claudeCode: AgentProvider = {
   id: "claude-code",
+  label: "Claude Code",
   run
 }
 
@@ -120,26 +122,4 @@ async function* run(options: AgentRunOptions): AsyncGenerator<AgentEvent> {
       }
     }
   }
-}
-
-/** Flatten a tool_result payload into something renderable. */
-function stringifyToolResult(content: unknown): string {
-  if (typeof content === "string") {
-    return content
-  }
-  if (Array.isArray(content)) {
-    return content
-      .map(part => {
-        if (typeof part === "string") return part
-        if (part && typeof part === "object" && "text" in part) {
-          return String((part as { text: unknown }).text)
-        }
-        return JSON.stringify(part)
-      })
-      .join("\n")
-  }
-  if (content == null) {
-    return ""
-  }
-  return JSON.stringify(content)
 }

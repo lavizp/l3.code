@@ -16,7 +16,11 @@ export type AgentRunOptions = {
    * when there is one. Providers that can't resume may ignore it.
    */
   resumeSessionId?: string
-  /** Tools the agent may call. Anything else should be refused. */
+  /**
+   * Tools the agent may call, where the provider has a per-tool allowlist.
+   * Providers that bound the agent some other way — a sandbox, say — may
+   * have nothing to map this onto and are free to ignore it.
+   */
   allowedTools: readonly string[]
 }
 
@@ -42,8 +46,10 @@ export type AgentEvent =
   | { type: "failed"; message: string }
 
 export interface AgentProvider {
-  /** Stable key used by config and the registry, e.g. "claude-code". */
+  /** Stable key used by config, the registry and the wire, e.g. "claude-code". */
   readonly id: string
+  /** What to call it in the UI, e.g. "Claude Code". */
+  readonly label: string
   /** Run one turn, streaming events as they happen. */
   run(options: AgentRunOptions): AsyncIterable<AgentEvent>
 }

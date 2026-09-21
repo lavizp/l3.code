@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react"
-import type { OutgoingMessageType } from "commons/types"
+import type { AgentSummary, OutgoingMessageType } from "commons/types"
 import { SERVER_URL } from "../config"
 import {
   appendLocalMessage,
@@ -19,10 +19,12 @@ export type AgentClient = {
   status: ConnectionStatus
   connected: boolean
   error: string | null
+  /** The agents a new session can be started with. */
+  agents: AgentSummary[]
   selectSession: (id: string | null) => void
   dismissError: () => void
   addWorkspace: (path: string) => void
-  newSession: (workspaceId: string) => void
+  newSession: (workspaceId: string, agentId: string) => void
   sendMessage: (message: string) => void
 }
 
@@ -35,10 +37,17 @@ export function useAgentClient(): AgentClient {
   const [workspaces, setWorkspaces] = useState<UIWorkspace[]>([])
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [agents, setAgents] = useState<AgentSummary[]>([])
 
   const onEvent = useCallback((event: OutgoingMessageType) => {
     setWorkspaces(prev => applyEvent(prev, event))
 
+    if (event.type === "init") {
+      // A server older than the agent choice sends no list, and a UI that
+      // can't draw itself is a worse answer than one that can't start a
+      // session until it reconnects.
+      setAgents(event.agents ?? [])
+    }
     if (event.type === "session-created") {
       setActiveSessionId(event.payload.id)
     }
@@ -62,8 +71,8 @@ export function useAgentClient(): AgentClient {
     send({ type: "create-workspace", payload: { path } })
   }
 
-  function newSession(workspaceId: string) {
-    send({ type: "create-session", payload: { workspaceId } })
+  function newSession(workspaceId: string, agentId: string) {
+    send({ type: "create-session", payload: { workspaceId, agentId } })
   }
 
   function sendMessage(message: string) {
@@ -88,6 +97,7 @@ export function useAgentClient(): AgentClient {
     status,
     connected: status === "open",
     error,
+    agents,
     selectSession: setActiveSessionId,
     dismissError: () => setError(null),
     addWorkspace,

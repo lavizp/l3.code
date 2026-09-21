@@ -18,6 +18,10 @@ export const config = {
   /** Which registered agent provider runs a turn when nothing else says. */
   defaultAgentId: process.env.AGENT ?? "claude-code",
 
-  /** Tools an agent may use. Everything else is refused by the provider. */
+  /**
+   * Tools an agent may use, for providers that take a per-tool allowlist.
+   * Codex has no such list — its sandbox is what bounds it — so this only
+   * reaches Claude Code.
+   */
   allowedTools: ["Read", "Edit", "Glob"] as const
 }

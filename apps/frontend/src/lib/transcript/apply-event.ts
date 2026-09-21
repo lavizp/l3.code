@@ -31,10 +31,10 @@ export function applyEvent(
     }
 
     case "session-created": {
-      const { id, workspaceId } = event.payload
+      const { id, workspaceId, agentId } = event.payload
       return workspaces.map(w =>
         w.id === workspaceId
-          ? { ...w, sessions: [...w.sessions, { id, messages: [] }] }
+          ? { ...w, sessions: [...w.sessions, { id, agentId, messages: [] }] }
           : w
       )
     }

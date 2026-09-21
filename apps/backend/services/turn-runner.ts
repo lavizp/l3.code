@@ -1,5 +1,5 @@
 import type { OutgoingMessageType, TurnStatus } from "commons/types"
-import type { AgentProvider } from "../agents"
+import { getAgent } from "../agents"
 import { config } from "../config"
 import {
   appendAssistantBlocks,
@@ -15,14 +15,15 @@ export type Emit = (message: OutgoingMessageType) => void
  * Persist the user's message, echo it back straight away, then stream the
  * agent's reply block by block. Nothing here waits for the turn to finish
  * before the client hears about it.
+ *
+ * Which agent runs is the session's own, chosen when it was created.
  */
 export async function runTurn(params: {
   sessionId: string
   message: string
-  agent: AgentProvider
   emit: Emit
 }): Promise<void> {
-  const { sessionId, message, agent, emit } = params
+  const { sessionId, message, emit } = params
 
   const appended = await appendUserMessage(sessionId, message)
   if (!appended) {
@@ -41,6 +42,7 @@ export async function runTurn(params: {
   })
   emit({ type: "turn-started", payload: { sessionId } })
 
+  const agent = getAgent(appended.session.agentId)
   const turn = new TurnBlocks()
   let agentSessionId = appended.session.agentSessionId
   let status: TurnStatus = "done"
@@ -103,7 +105,7 @@ export async function runTurn(params: {
           // Only the first one matters: that's the thread we resume into.
           if (!agentSessionId) {
             agentSessionId = event.sessionId
-            await saveAgentSessionId(sessionId, event.sessionId)
+            await saveAgentSessionId(sessionId, agent.id, event.sessionId)
           }
           break
 

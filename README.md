@@ -60,11 +60,9 @@ bun dev
 That's `turbo run dev` — backend on `:8080`, frontend on Bun's dev server with
 HMR. Open the frontend, choose a folder, start a session, and send a message.
 
-"Choose folder" opens your operating system's own folder dialog. That dialog
-won't disclose a path — no browser will — so it hands back the folder's name
-and contents, and the server finds the matching folder on its own filesystem.
-Run the two on the same machine. When more than one folder fits, or none does,
-you get a choice or a browser rather than a guess.
+The folder picker browses the *backend's* filesystem, not yours: a browser
+never discloses an absolute path, and an absolute path is what the agent needs
+for its working directory. Run the two on the same machine.
 
 To run one side only:
 

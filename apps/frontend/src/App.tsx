@@ -22,10 +22,6 @@ export function App() {
           agents={agent.agents}
           directory={agent.directory}
           directoryLoading={agent.directoryLoading}
-          located={agent.located}
-          locating={agent.locating}
-          onChooseFolder={agent.chooseFolder}
-          onDismissLocated={agent.dismissLocated}
           onBrowseDirectory={agent.browseDirectory}
           onAddWorkspace={agent.addWorkspace}
           onSelectSession={agent.selectSession}

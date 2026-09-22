@@ -24,21 +24,6 @@ export const ListDirectorySchema = z.object({
 })
 export type ListDirectorySchemaType = z.infer<typeof ListDirectorySchema>
 
-/**
- * What the browser's own folder dialog gives us about the folder someone
- * chose: its name, and what sits directly inside it. Never a path.
- */
-export const LocateFolderSchema = z.object({
-  name: z.string(),
-  entries: z.array(
-    z.object({
-      name: z.string(),
-      kind: z.enum(["file", "directory"])
-    })
-  )
-})
-export type LocateFolderSchemaType = z.infer<typeof LocateFolderSchema>
-
 export const AddMessageSchema = z.object({
   sessionId: z.string(),
   message: z.string()
@@ -61,8 +46,4 @@ export type IncommingMessageType =
   | {
       type: 'list-directory'
       payload: ListDirectorySchemaType
-    }
-  | {
-      type: 'locate-folder'
-      payload: LocateFolderSchemaType
     }

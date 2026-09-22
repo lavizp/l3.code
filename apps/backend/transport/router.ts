@@ -3,14 +3,12 @@ import {
   CreateSessionSchema,
   CreateWorkspaceSchema,
   ListDirectorySchema,
-  LocateFolderSchema,
   type IncommingMessageType
 } from "commons/types"
 import { getAgent } from "../agents"
 import { createSession } from "../repositories/sessions"
 import { createWorkspace } from "../repositories/workspaces"
 import { listDirectory } from "../services/directory"
-import { locateFolder } from "../services/locate-folder"
 import { runTurn } from "../services/turn-runner"
 import type { Connection } from "./connection"
 
@@ -41,14 +39,6 @@ const HANDLERS: Record<IncommingMessageType["type"], Handler> = {
       type: "directory-listed",
       payload: await listDirectory(data.path)
     })
-  },
-
-  "locate-folder": async (connection, payload) => {
-    const { success, data } = LocateFolderSchema.safeParse(payload)
-    if (!success) {
-      throw new Error("Incorrect Schema")
-    }
-    connection.send({ type: "folder-located", payload: await locateFolder(data) })
   },
 
   "create-session": async (connection, payload) => {

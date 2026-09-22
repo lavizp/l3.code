@@ -22,6 +22,27 @@ export const MessageAdded = z.object({
 })
 export type MessageAddedType = z.infer<typeof MessageAdded>
 
+/** One folder in a directory listing: somewhere to descend into, or to pick. */
+export type DirectoryEntry = {
+  name: string
+  path: string
+}
+
+/**
+ * One level of the server's filesystem, for the folder picker. A browser
+ * never reveals an absolute path — a folder input only exposes names
+ * relative to whatever was chosen — and an absolute path is exactly what an
+ * agent needs for its working directory, so the walking happens server-side.
+ */
+export type DirectoryListing = {
+  /** The absolute path that was listed, resolved. */
+  path: string
+  /** One level up, or null when there is nowhere further to go. */
+  parent: string | null
+  /** Sub-directories only. The picker chooses folders, not files. */
+  entries: DirectoryEntry[]
+}
+
 /**
  * One renderable piece of an assistant turn. A turn is an ordered list of
  * these: prose the model wrote, interleaved with the tools it ran.
@@ -110,6 +131,11 @@ export type OutgoingMessageType =
         status: TurnStatus
         error?: string
       }
+    }
+  /** Answer to `list-directory`, for the folder picker. */
+  | {
+      type: 'directory-listed'
+      payload: DirectoryListing
     }
   | {
       type: 'error'

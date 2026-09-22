@@ -2,11 +2,13 @@ import {
   AddMessageSchema,
   CreateSessionSchema,
   CreateWorkspaceSchema,
+  ListDirectorySchema,
   type IncommingMessageType
 } from "commons/types"
 import { getAgent } from "../agents"
 import { createSession } from "../repositories/sessions"
 import { createWorkspace } from "../repositories/workspaces"
+import { listDirectory } from "../services/directory"
 import { runTurn } from "../services/turn-runner"
 import type { Connection } from "./connection"
 
@@ -25,6 +27,18 @@ const HANDLERS: Record<IncommingMessageType["type"], Handler> = {
     }
     const workspace = await createWorkspace(data.path)
     connection.send({ type: "workspace-created", payload: workspace })
+  },
+
+  "list-directory": async (connection, payload) => {
+    // No payload at all is a fair way to ask for the default starting point.
+    const { success, data } = ListDirectorySchema.safeParse(payload ?? {})
+    if (!success) {
+      throw new Error("Incorrect Schema")
+    }
+    connection.send({
+      type: "directory-listed",
+      payload: await listDirectory(data.path)
+    })
   },
 
   "create-session": async (connection, payload) => {

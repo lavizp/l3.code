@@ -44,6 +44,22 @@ export type DirectoryListing = {
 }
 
 /**
+ * Where a folder chosen in the browser's own dialog actually lives.
+ *
+ * The dialog gives a name and the folder's contents but no path, so the
+ * server finds it again by looking for that name with those contents. More
+ * than one path means two folders fit the description equally well and only
+ * a person can say which; none means the search didn't reach it.
+ */
+export type FolderLocated = {
+  name: string
+  /** Absolute paths that fit, closest fit first. */
+  candidates: string[]
+  /** More fitted than are listed: the fingerprint wasn't discriminating. */
+  truncated: boolean
+}
+
+/**
  * One renderable piece of an assistant turn. A turn is an ordered list of
  * these: prose the model wrote, interleaved with the tools it ran.
  */
@@ -131,6 +147,11 @@ export type OutgoingMessageType =
         status: TurnStatus
         error?: string
       }
+    }
+  /** Answer to `locate-folder`: where the chosen folder turned out to be. */
+  | {
+      type: 'folder-located'
+      payload: FolderLocated
     }
   /** Answer to `list-directory`, for the folder picker. */
   | {

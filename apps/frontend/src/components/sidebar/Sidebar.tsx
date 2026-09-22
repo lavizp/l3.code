@@ -1,5 +1,5 @@
 import { useState } from "react"
-import type { AgentSummary, DirectoryListing } from "commons/types"
+import type { AgentSummary, DirectoryListing, FolderLocated } from "commons/types"
 import type { ConnectionStatus as Status } from "../../hooks/useSocket"
 import type { UIWorkspace } from "../../lib/transcript"
 import { AddWorkspaceForm } from "./AddWorkspaceForm"
@@ -13,6 +13,10 @@ export function Sidebar({
   agents,
   directory,
   directoryLoading,
+  located,
+  locating,
+  onChooseFolder,
+  onDismissLocated,
   onBrowseDirectory,
   onAddWorkspace,
   onSelectSession,
@@ -24,6 +28,10 @@ export function Sidebar({
   agents: AgentSummary[]
   directory: DirectoryListing | null
   directoryLoading: boolean
+  located: FolderLocated | null
+  locating: boolean
+  onChooseFolder: () => void
+  onDismissLocated: () => void
   onBrowseDirectory: (path?: string) => void
   onAddWorkspace: (path: string) => void
   onSelectSession: (id: string) => void
@@ -40,6 +48,10 @@ export function Sidebar({
       <AddWorkspaceForm
         listing={directory}
         loading={directoryLoading}
+        located={located}
+        locating={locating}
+        onChooseFolder={onChooseFolder}
+        onDismissLocated={onDismissLocated}
         onBrowse={onBrowseDirectory}
         onAdd={onAddWorkspace}
       />

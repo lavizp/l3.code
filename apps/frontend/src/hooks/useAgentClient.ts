@@ -1,6 +1,13 @@
-import { useCallback, useState } from "react"
-import type { AgentSummary, DirectoryListing, OutgoingMessageType } from "commons/types"
+import { useCallback, useRef, useState } from "react"
+import type {
+  AgentSummary,
+  DirectoryListing,
+  FolderLocated,
+  IncommingMessageType,
+  OutgoingMessageType
+} from "commons/types"
 import { SERVER_URL } from "../config"
+import { pickFolder } from "../lib/folder"
 import {
   appendLocalMessage,
   applyEvent,
@@ -25,9 +32,19 @@ export type AgentClient = {
   directory: DirectoryListing | null
   /** A listing is in flight. */
   directoryLoading: boolean
+  /**
+   * Where the folder chosen in the OS dialog turned out to be, when it took
+   * more than one answer — or none. A single match is just added.
+   */
+  located: FolderLocated | null
+  /** The server is working out where the chosen folder lives. */
+  locating: boolean
   selectSession: (id: string | null) => void
   dismissError: () => void
   browseDirectory: (path?: string) => void
+  /** Open the operating system's folder dialog and add what comes back. */
+  chooseFolder: () => Promise<void>
+  dismissLocated: () => void
   addWorkspace: (path: string) => void
   newSession: (workspaceId: string, agentId: string) => void
   sendMessage: (message: string) => void
@@ -45,6 +62,12 @@ export function useAgentClient(): AgentClient {
   const [agents, setAgents] = useState<AgentSummary[]>([])
   const [directory, setDirectory] = useState<DirectoryListing | null>(null)
   const [directoryLoading, setDirectoryLoading] = useState(false)
+  const [located, setLocated] = useState<FolderLocated | null>(null)
+  const [locating, setLocating] = useState(false)
+  // `send` only exists after useSocket, which needs the handler first. The
+  // handler answers a folder search by creating a workspace, so it reaches
+  // the socket through here rather than the other way round.
+  const sendRef = useRef<(message: IncommingMessageType) => boolean>(() => false)
 
   const onEvent = useCallback((event: OutgoingMessageType) => {
     setWorkspaces(prev => applyEvent(prev, event))
@@ -62,8 +85,20 @@ export function useAgentClient(): AgentClient {
       setDirectory(event.payload)
       setDirectoryLoading(false)
     }
+    if (event.type === "folder-located") {
+      setLocating(false)
+      const [only, ...rest] = event.payload.candidates
+      // One answer needs no question asked.
+      if (only && rest.length === 0) {
+        setWorkspaces(prev => [...prev, { id: null, name: baseName(only), path: only, sessions: [] }])
+        sendRef.current({ type: "create-workspace", payload: { path: only } })
+      } else {
+        setLocated(event.payload)
+      }
+    }
     if (event.type === "error") {
       setError(event.payload.message)
+      setLocating(false)
       // An unreadable folder answers with an error and no listing, so the
       // picker would otherwise sit on "Reading…" for good.
       setDirectoryLoading(false)
@@ -74,6 +109,7 @@ export function useAgentClient(): AgentClient {
   }, [])
 
   const { status, send } = useSocket(SERVER_URL, onEvent)
+  sendRef.current = send
 
   const workspace = findWorkspaceOfSession(workspaces, activeSessionId)
   const session = workspace?.sessions.find(s => s.id === activeSessionId)
@@ -86,8 +122,21 @@ export function useAgentClient(): AgentClient {
     }
   }
 
+  async function chooseFolder() {
+    const picked = await pickFolder()
+    if (!picked) {
+      return
+    }
+    setLocated(null)
+    setLocating(true)
+    if (!send({ type: "locate-folder", payload: picked })) {
+      setLocating(false)
+      setError("Not connected — couldn't look that folder up.")
+    }
+  }
+
   function addWorkspace(path: string) {
-    const name = path.split("/").filter(Boolean).pop() ?? path
+    const name = baseName(path)
     // Show the row immediately; the server fills in the id.
     setWorkspaces(prev => [...prev, { id: null, name, path, sessions: [] }])
     send({ type: "create-workspace", payload: { path } })
@@ -122,11 +171,20 @@ export function useAgentClient(): AgentClient {
     agents,
     directory,
     directoryLoading,
+    located,
+    locating,
     selectSession: setActiveSessionId,
     dismissError: () => setError(null),
     browseDirectory,
+    chooseFolder,
+    dismissLocated: () => setLocated(null),
     addWorkspace,
     newSession,
     sendMessage
   }
+}
+
+/** The trailing segment of a path, which is what a workspace is called. */
+function baseName(path: string): string {
+  return path.split("/").filter(Boolean).pop() ?? path
 }

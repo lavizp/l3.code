@@ -20,6 +20,9 @@ export function App() {
           activeSessionId={agent.activeSessionId}
           status={agent.status}
           agents={agent.agents}
+          directory={agent.directory}
+          directoryLoading={agent.directoryLoading}
+          onBrowseDirectory={agent.browseDirectory}
           onAddWorkspace={agent.addWorkspace}
           onSelectSession={agent.selectSession}
           onNewSession={agent.newSession}

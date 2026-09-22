@@ -58,8 +58,11 @@ bun dev
 ```
 
 That's `turbo run dev` — backend on `:8080`, frontend on Bun's dev server with
-HMR. Open the frontend, add a workspace by absolute path, start a session, and
-send a message.
+HMR. Open the frontend, choose a folder, start a session, and send a message.
+
+The folder picker browses the *backend's* filesystem, not yours: a browser
+never discloses an absolute path, and an absolute path is what the agent needs
+for its working directory. Run the two on the same machine.
 
 To run one side only:
 
@@ -132,7 +135,8 @@ in place.
 Two things make this a local-only tool as it stands:
 
 - **The websocket server has no authentication.** Anyone who can reach the port
-  can register any absolute path as a workspace and run an agent in it.
+  can browse the filesystem through the folder picker, register any absolute
+  path as a workspace, and run an agent in it.
 - **The Claude Code adapter uses `permissionMode: "bypassPermissions"`** — tool
   calls are not prompted for. The `allowedTools` list is the only bound;
   Codex relies on its own sandbox instead.

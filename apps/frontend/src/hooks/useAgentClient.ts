@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react"
-import type { AgentSummary, OutgoingMessageType } from "commons/types"
+import type { AgentSummary, DirectoryListing, OutgoingMessageType } from "commons/types"
 import { SERVER_URL } from "../config"
 import {
   appendLocalMessage,
@@ -21,8 +21,13 @@ export type AgentClient = {
   error: string | null
   /** The agents a new session can be started with. */
   agents: AgentSummary[]
+  /** The folder the picker is currently showing, once one has been asked for. */
+  directory: DirectoryListing | null
+  /** A listing is in flight. */
+  directoryLoading: boolean
   selectSession: (id: string | null) => void
   dismissError: () => void
+  browseDirectory: (path?: string) => void
   addWorkspace: (path: string) => void
   newSession: (workspaceId: string, agentId: string) => void
   sendMessage: (message: string) => void
@@ -30,14 +35,16 @@ export type AgentClient = {
 
 /**
  * The whole client-side view of the agent: the workspace tree, which session
- * is open, and the three things a person can ask the server to do. Server
- * events are folded into state here; components stay presentational.
+ * is open, and the things a person can ask the server to do. Server events
+ * are folded into state here; components stay presentational.
  */
 export function useAgentClient(): AgentClient {
   const [workspaces, setWorkspaces] = useState<UIWorkspace[]>([])
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [agents, setAgents] = useState<AgentSummary[]>([])
+  const [directory, setDirectory] = useState<DirectoryListing | null>(null)
+  const [directoryLoading, setDirectoryLoading] = useState(false)
 
   const onEvent = useCallback((event: OutgoingMessageType) => {
     setWorkspaces(prev => applyEvent(prev, event))
@@ -51,8 +58,15 @@ export function useAgentClient(): AgentClient {
     if (event.type === "session-created") {
       setActiveSessionId(event.payload.id)
     }
+    if (event.type === "directory-listed") {
+      setDirectory(event.payload)
+      setDirectoryLoading(false)
+    }
     if (event.type === "error") {
       setError(event.payload.message)
+      // An unreadable folder answers with an error and no listing, so the
+      // picker would otherwise sit on "Reading…" for good.
+      setDirectoryLoading(false)
     }
     if (event.type === "turn-ended" && event.payload.status === "error") {
       setError(event.payload.error ?? "The agent stopped before finishing.")
@@ -63,6 +77,14 @@ export function useAgentClient(): AgentClient {
 
   const workspace = findWorkspaceOfSession(workspaces, activeSessionId)
   const session = workspace?.sessions.find(s => s.id === activeSessionId)
+
+  function browseDirectory(path?: string) {
+    setDirectoryLoading(true)
+    if (!send({ type: "list-directory", payload: { path } })) {
+      setDirectoryLoading(false)
+      setError("Not connected — couldn't read that folder.")
+    }
+  }
 
   function addWorkspace(path: string) {
     const name = path.split("/").filter(Boolean).pop() ?? path
@@ -98,8 +120,11 @@ export function useAgentClient(): AgentClient {
     connected: status === "open",
     error,
     agents,
+    directory,
+    directoryLoading,
     selectSession: setActiveSessionId,
     dismissError: () => setError(null),
+    browseDirectory,
     addWorkspace,
     newSession,
     sendMessage

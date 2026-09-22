@@ -15,6 +15,15 @@ export const CreateSessionSchema = z.object({
 })
 export type CreateSessionSchemaType = z.infer<typeof CreateSessionSchema>
 
+export const ListDirectorySchema = z.object({
+  /**
+   * Absolute path to list. Omitted means the server's own starting point —
+   * the client has no way of knowing what that should be.
+   */
+  path: z.string().optional()
+})
+export type ListDirectorySchemaType = z.infer<typeof ListDirectorySchema>
+
 export const AddMessageSchema = z.object({
   sessionId: z.string(),
   message: z.string()
@@ -33,4 +42,8 @@ export type IncommingMessageType =
   | {
       type: 'add-message'
       payload: AddMessageSchemaType
+    }
+  | {
+      type: 'list-directory'
+      payload: ListDirectorySchemaType
     }

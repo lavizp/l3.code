@@ -1,4 +1,4 @@
-import type { AssistantBlock } from "commons/types"
+import type { AssistantBlock, Failure, Notice } from "commons/types"
 
 export type UIMessage =
   | { id: string; role: "user"; text: string }
@@ -7,7 +7,14 @@ export type UIMessage =
       role: "assistant"
       blocks: AssistantBlock[]
       running: boolean
-      error?: string
+      /** Why the turn stopped, when it didn't finish. */
+      error?: Failure
+      /**
+       * Something the server said mid-turn — a retry, an allowance running
+       * low. Only ever set while `running`, and never persisted: it stops
+       * being true the moment the turn ends.
+       */
+      notice?: Notice
     }
 
 export type UIAssistantMessage = Extract<UIMessage, { role: "assistant" }>

@@ -1,4 +1,5 @@
 import z from "zod"
+import type { Failure, Notice } from "./errors"
 
 export const WorkspaceCreatedSchema = z.object({
   id: z.string(),
@@ -129,17 +130,26 @@ export type OutgoingMessageType =
         sessionId: string
         id: string | null
         status: TurnStatus
-        error?: string
+        error?: Failure
       }
+    }
+  /**
+   * Something happened mid-turn that the person should see but that doesn't
+   * end the turn — a retry after a hiccup, an allowance running low.
+   */
+  | {
+      type: 'notice'
+      payload: { sessionId: string; notice: Notice }
     }
   /** Answer to `list-directory`, for the folder picker. */
   | {
       type: 'directory-listed'
       payload: DirectoryListing
     }
+  /** Something failed outside a turn: a bad request, the database, us. */
   | {
       type: 'error'
-      payload: { sessionId?: string; message: string }
+      payload: { sessionId?: string; error: Failure }
     }
 
 export type Workspace = {

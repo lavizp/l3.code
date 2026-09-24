@@ -1,4 +1,6 @@
 import { Codex, type ThreadItem, type ThreadOptions } from "@openai/codex-sdk"
+import type { Failure } from "commons/types"
+import { agentFailure, classifyText, classifyThrown } from "./failures"
 import { stringifyToolResult } from "./tool-result"
 import type { AgentEvent, AgentProvider, AgentRunOptions } from "./types"
 
@@ -22,41 +24,57 @@ export const codex: AgentProvider = {
 
 const client = new Codex()
 
+const LABEL = "Codex"
+
 async function* run(options: AgentRunOptions): AsyncGenerator<AgentEvent> {
-  const thread = options.resumeSessionId
-    ? client.resumeThread(options.resumeSessionId, threadOptions(options))
-    : client.startThread(threadOptions(options))
+  // Codex reports trouble as a sentence and nothing else, so everything here
+  // is read back out of the text. Where the SDK throws instead — the binary
+  // missing, `codex login` never run — the throw is classified the same way.
+  try {
+    const thread = options.resumeSessionId
+      ? client.resumeThread(options.resumeSessionId, threadOptions(options))
+      : client.startThread(threadOptions(options))
 
-  const { events } = await thread.runStreamed(options.prompt)
+    const { events } = await thread.runStreamed(options.prompt, {
+      signal: options.signal
+    })
 
-  // Codex resends a message whole every time it grows, so remember what the
-  // client has already been told and send only the new tail.
-  const sent = new Map<string, string>()
-  // Items we've already opened a tool block for, so a revision doesn't open
-  // a second one and a completion can close one we somehow never started.
-  const opened = new Set<string>()
+    // Codex resends a message whole every time it grows, so remember what the
+    // client has already been told and send only the new tail.
+    const sent = new Map<string, string>()
+    // Items we've already opened a tool block for, so a revision doesn't open
+    // a second one and a completion can close one we somehow never started.
+    const opened = new Set<string>()
 
-  for await (const event of events) {
-    switch (event.type) {
-      case "thread.started":
-        yield { type: "session", sessionId: event.thread_id }
-        break
+    for await (const event of events) {
+      switch (event.type) {
+        case "thread.started":
+          yield { type: "session", sessionId: event.thread_id }
+          break
 
-      case "item.started":
-      case "item.updated":
-      case "item.completed":
-        yield* translate(event.item, event.type === "item.completed", sent, opened)
-        break
+        case "item.started":
+        case "item.updated":
+        case "item.completed":
+          yield* translate(event.item, event.type === "item.completed", sent, opened)
+          break
 
-      case "turn.failed":
-        yield { type: "failed", message: event.error.message }
-        break
+        case "turn.failed":
+          yield { type: "failed", error: fromMessage(event.error.message) }
+          break
 
-      case "error":
-        yield { type: "failed", message: event.message }
-        break
+        case "error":
+          yield { type: "failed", error: fromMessage(event.message) }
+          break
+      }
     }
+  } catch (cause) {
+    yield { type: "failed", error: classifyThrown(cause, LABEL) }
   }
+}
+
+/** Codex's own sentence, read for what kind of trouble it describes. */
+function fromMessage(message: string): Failure {
+  return agentFailure(classifyText(message), LABEL, { detail: message })
 }
 
 function threadOptions(options: AgentRunOptions): ThreadOptions {

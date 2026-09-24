@@ -6,11 +6,20 @@
  * plus one `registerAgent` call. Nothing else has to change.
  */
 
+import type { Failure, Notice } from "commons/types"
+
 export type AgentRunOptions = {
   /** What the user asked for on this turn. */
   prompt: string
   /** Directory the agent is allowed to work in. */
   cwd: string
+  /**
+   * Aborted when the turn should stop early — the client went away, or the
+   * agent went quiet for too long. A provider is expected to pass this down
+   * to whatever it spawns: without it the work carries on unwatched, still
+   * spending the plan's allowance on a reply nobody will read.
+   */
+  signal: AbortSignal
   /**
    * The provider's own conversation id from an earlier turn in this session,
    * when there is one. Providers that can't resume may ignore it.
@@ -42,8 +51,14 @@ export type AgentEvent =
   | { type: "tool-end"; toolUseId: string; result: string; isError: boolean }
   /** The provider's conversation id, stored so the next turn can resume. */
   | { type: "session"; sessionId: string }
+  /**
+   * Something the person should know that doesn't end the turn: the provider
+   * is retrying after a hiccup, the plan's allowance is nearly spent. A turn
+   * carries on after one of these.
+   */
+  | { type: "notice"; notice: Notice }
   /** The turn failed. The stream is expected to end shortly after. */
-  | { type: "failed"; message: string }
+  | { type: "failed"; error: Failure }
 
 export interface AgentProvider {
   /** Stable key used by config, the registry and the wire, e.g. "claude-code". */

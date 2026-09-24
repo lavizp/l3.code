@@ -138,6 +138,11 @@ export function applyEvent(
       )
     }
 
+    case "notice": {
+      const { sessionId, notice } = event.payload
+      return mapLiveTurn(workspaces, sessionId, message => ({ ...message, notice }))
+    }
+
     case "turn-ended": {
       const { sessionId, id, status, error } = event.payload
       const live = liveId(sessionId)
@@ -147,13 +152,22 @@ export function applyEvent(
           if (m.id !== live || m.role !== "assistant") {
             return [m]
           }
-          // An empty turn that didn't fail has nothing to show.
-          if (m.blocks.length === 0 && status !== "error") {
+          // An empty turn that finished cleanly has nothing to show.
+          if (m.blocks.length === 0 && status === "done") {
             return []
           }
           // Always move off the live id, otherwise the next turn in this
-          // session would collide with this one and never open.
-          return [{ ...m, id: id ?? `${live}:${Date.now()}`, running: false, error }]
+          // session would collide with this one and never open. The notice
+          // goes with it: a retry that has finished isn't news any more.
+          return [
+            {
+              ...m,
+              id: id ?? `${live}:${Date.now()}`,
+              running: false,
+              notice: undefined,
+              error
+            }
+          ]
         })
       }))
     }

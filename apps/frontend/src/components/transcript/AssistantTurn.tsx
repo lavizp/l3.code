@@ -1,6 +1,7 @@
 import { Markdown } from "../../lib/markdown"
 import type { UIAssistantMessage } from "../../lib/transcript"
 import { ToolRow } from "./ToolRow"
+import { TurnFailure, TurnNotice } from "./TurnFailure"
 
 export function AssistantTurn({
   message,
@@ -32,11 +33,9 @@ export function AssistantTurn({
         </p>
       )}
 
-      {message.error && (
-        <p className="max-w-[68ch] border-l-2 border-alarm pl-3 font-mono text-[13px] text-alarm">
-          {message.error}
-        </p>
-      )}
+      {message.running && message.notice && <TurnNotice notice={message.notice} />}
+
+      {message.error && <TurnFailure error={message.error} />}
     </div>
   )
 }

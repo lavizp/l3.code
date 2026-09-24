@@ -10,6 +10,10 @@ export function Sidebar({
   workspaces,
   activeSessionId,
   status,
+  attempts,
+  retryAt,
+  everConnected,
+  onReconnect,
   agents,
   directory,
   directoryLoading,
@@ -21,6 +25,10 @@ export function Sidebar({
   workspaces: UIWorkspace[]
   activeSessionId: string | null
   status: Status
+  attempts: number
+  retryAt: number | null
+  everConnected: boolean
+  onReconnect: () => void
   agents: AgentSummary[]
   directory: DirectoryListing | null
   directoryLoading: boolean
@@ -65,7 +73,13 @@ export function Sidebar({
         )}
       </div>
 
-      <ConnectionStatus status={status} />
+      <ConnectionStatus
+        status={status}
+        attempts={attempts}
+        retryAt={retryAt}
+        everConnected={everConnected}
+        onReconnect={onReconnect}
+      />
     </div>
   )
 }

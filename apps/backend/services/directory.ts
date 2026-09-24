@@ -2,6 +2,7 @@ import { readdir, stat } from "node:fs/promises"
 import { homedir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import type { DirectoryEntry, DirectoryListing } from "commons/types"
+import { fail } from "../errors"
 
 /**
  * Filesystem walking for the folder picker.
@@ -17,7 +18,7 @@ export async function listDirectory(requested?: string): Promise<DirectoryListin
 
   const info = await describeError(path, () => stat(path))
   if (!info.isDirectory()) {
-    throw new Error(`Not a folder: ${path}`)
+    fail("bad-request", `Not a folder: ${path}`)
   }
 
   const entries = await describeError(path, () =>
@@ -75,13 +76,13 @@ async function describeError<T>(path: string, read: () => Promise<T>): Promise<T
   } catch (e) {
     const code = (e as NodeJS.ErrnoException).code
     if (code === "ENOENT") {
-      throw new Error(`No such folder: ${path}`)
+      fail("not-found", `No such folder: ${path}`)
     }
     if (code === "EACCES" || code === "EPERM") {
-      throw new Error(`Not allowed to read ${path}`)
+      fail("bad-request", `Not allowed to read ${path}`)
     }
     if (code === "ENOTDIR") {
-      throw new Error(`Not a folder: ${path}`)
+      fail("bad-request", `Not a folder: ${path}`)
     }
     throw e
   }

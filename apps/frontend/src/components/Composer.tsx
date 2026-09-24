@@ -3,11 +3,18 @@ import { useEffect, useRef, useState } from "react"
 export function Composer({
   onSend,
   busy,
-  disabled
+  disabled,
+  blockedReason
 }: {
   onSend: (message: string) => void
   busy: boolean
   disabled: boolean
+  /**
+   * Why sending is off, when it's off for a reason the person can't see from
+   * the state of the socket — a plan limit that hasn't reset yet. A disabled
+   * box with no explanation reads as a broken app.
+   */
+  blockedReason?: string
 }) {
   const [value, setValue] = useState("")
   const ref = useRef<HTMLTextAreaElement>(null)
@@ -22,7 +29,7 @@ export function Composer({
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`
   }, [value])
 
-  const blocked = busy || disabled
+  const blocked = busy || disabled || Boolean(blockedReason)
 
   function send() {
     const trimmed = value.trim()
@@ -42,7 +49,13 @@ export function Composer({
             rows={1}
             className="max-h-[200px] min-w-0 flex-1 resize-none bg-transparent text-[15px] text-ink placeholder:text-dim/60 focus:outline-none"
             placeholder={
-              disabled ? "Reconnecting…" : busy ? "The agent is working…" : "Ask for a change"
+              blockedReason
+                ? blockedReason
+                : disabled
+                  ? "Reconnecting…"
+                  : busy
+                    ? "The agent is working…"
+                    : "Ask for a change"
             }
             value={value}
             disabled={blocked}
@@ -63,7 +76,8 @@ export function Composer({
           </button>
         </div>
         <p className="mt-1.5 font-mono text-[11px] text-dim">
-          Enter sends, Shift+Enter adds a line. The agent can read and edit files here.
+          {blockedReason ??
+            "Enter sends, Shift+Enter adds a line. The agent can read and edit files here."}
         </p>
       </div>
     </div>

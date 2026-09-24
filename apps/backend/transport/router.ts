@@ -2,11 +2,17 @@ import {
   AddMessageSchema,
   CreateSessionSchema,
   CreateWorkspaceSchema,
+  DeleteSessionSchema,
   ListDirectorySchema,
+  RenameSessionSchema,
   type IncommingMessageType
 } from "commons/types"
 import { getAgent } from "../agents"
-import { createSession } from "../repositories/sessions"
+import {
+  createSession,
+  deleteSession,
+  renameSession
+} from "../repositories/sessions"
 import { createWorkspace } from "../repositories/workspaces"
 import { listDirectory } from "../services/directory"
 import { runTurn } from "../services/turn-runner"
@@ -55,6 +61,32 @@ const HANDLERS: Record<IncommingMessageType["type"], Handler> = {
       type: "session-created",
       payload: { id: session.id, workspaceId: data.workspaceId, agentId: agent.id }
     })
+  },
+
+  "rename-session": async (connection, payload) => {
+    const { success, data } = RenameSessionSchema.safeParse(payload)
+    if (!success) {
+      throw new Error("Incorrect Schema")
+    }
+    const renamed = await renameSession(data.sessionId, data.name)
+    if (!renamed) {
+      throw new Error("Session Not found")
+    }
+    connection.send({
+      type: "session-renamed",
+      payload: { id: data.sessionId, name: renamed.name }
+    })
+  },
+
+  "delete-session": async (connection, payload) => {
+    const { success, data } = DeleteSessionSchema.safeParse(payload)
+    if (!success) {
+      throw new Error("Incorrect Schema")
+    }
+    // A session already gone is the outcome that was asked for, so tell the
+    // client it's gone either way rather than failing on the second try.
+    await deleteSession(data.sessionId)
+    connection.send({ type: "session-deleted", payload: { id: data.sessionId } })
   },
 
   "add-message": async (connection, payload) => {

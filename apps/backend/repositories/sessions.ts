@@ -13,6 +13,8 @@ const LEGACY_AGENT_ID = "claude-code"
 export type StoredSession = {
   id: string
   workspaceId: string | undefined
+  /** The name the person gave it, or null when they haven't named it. */
+  name: string | null
   /** Which agent provider runs this session's turns. */
   agentId: string
   /** That provider's own conversation id, when there is one to resume. */
@@ -30,7 +32,44 @@ export async function createSession(
     agent: agentId,
     conversation: []
   })
-  return { id: session._id.toString(), workspaceId, agentId, agentSessionId: undefined }
+  return {
+    id: session._id.toString(),
+    workspaceId,
+    name: null,
+    agentId,
+    agentSessionId: undefined
+  }
+}
+
+/**
+ * Give a session a name, or clear it when the name is blank. Returns the
+ * name as stored — null once cleared — or null-the-whole-result when there
+ * is no such session, which the caller tells apart by the outer null.
+ */
+export async function renameSession(
+  sessionId: string,
+  name: string
+): Promise<{ name: string | null } | null> {
+  const trimmed = name.trim()
+  const session = await SessionModel.findByIdAndUpdate(
+    sessionId,
+    trimmed ? { $set: { name: trimmed } } : { $unset: { name: "" } },
+    { new: true }
+  )
+  if (!session) {
+    return null
+  }
+  return { name: session.name ?? null }
+}
+
+/**
+ * Drop a session and its whole conversation. The agent's own copy of the
+ * conversation lives with the provider and is not ours to delete; all this
+ * removes is our record of it, including the id that could resume it.
+ */
+export async function deleteSession(sessionId: string): Promise<boolean> {
+  const { deletedCount } = await SessionModel.deleteOne({ _id: sessionId })
+  return deletedCount > 0
 }
 
 /**
@@ -91,6 +130,7 @@ function readSession(doc: SessionDoc): StoredSession {
   return {
     id: doc._id.toString(),
     workspaceId: doc.workspace?.toString(),
+    name: doc.name ?? null,
     agentId,
     agentSessionId: resumeIdFor(doc, agentId)
   }

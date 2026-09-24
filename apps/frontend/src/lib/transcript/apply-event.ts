@@ -34,7 +34,24 @@ export function applyEvent(
       const { id, workspaceId, agentId } = event.payload
       return workspaces.map(w =>
         w.id === workspaceId
-          ? { ...w, sessions: [...w.sessions, { id, agentId, messages: [] }] }
+          ? {
+              ...w,
+              sessions: [...w.sessions, { id, agentId, name: null, messages: [] }]
+            }
+          : w
+      )
+    }
+
+    case "session-renamed": {
+      const { id, name } = event.payload
+      return mapSession(workspaces, id, session => ({ ...session, name }))
+    }
+
+    case "session-deleted": {
+      const { id } = event.payload
+      return workspaces.map(w =>
+        w.sessions.some(s => s.id === id)
+          ? { ...w, sessions: w.sessions.filter(s => s.id !== id) }
           : w
       )
     }

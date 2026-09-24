@@ -30,6 +30,9 @@ export type AgentClient = {
   browseDirectory: (path?: string) => void
   addWorkspace: (path: string) => void
   newSession: (workspaceId: string, agentId: string) => void
+  /** Name a session, or clear the name back to derived by passing "". */
+  renameSession: (sessionId: string, name: string) => void
+  deleteSession: (sessionId: string) => void
   sendMessage: (message: string) => void
 }
 
@@ -57,6 +60,12 @@ export function useAgentClient(): AgentClient {
     }
     if (event.type === "session-created") {
       setActiveSessionId(event.payload.id)
+    }
+    if (event.type === "session-deleted") {
+      // Whatever was open is gone; fall back to the empty state rather than
+      // leaving the main pane pointing at a session that no longer exists.
+      const deleted = event.payload.id
+      setActiveSessionId(current => (current === deleted ? null : current))
     }
     if (event.type === "directory-listed") {
       setDirectory(event.payload)
@@ -97,6 +106,18 @@ export function useAgentClient(): AgentClient {
     send({ type: "create-session", payload: { workspaceId, agentId } })
   }
 
+  function renameSession(sessionId: string, name: string) {
+    if (!send({ type: "rename-session", payload: { sessionId, name } })) {
+      setError("Not connected — the session wasn't renamed.")
+    }
+  }
+
+  function deleteSession(sessionId: string) {
+    if (!send({ type: "delete-session", payload: { sessionId } })) {
+      setError("Not connected — the session wasn't deleted.")
+    }
+  }
+
   function sendMessage(message: string) {
     if (!session) {
       return
@@ -127,6 +148,8 @@ export function useAgentClient(): AgentClient {
     browseDirectory,
     addWorkspace,
     newSession,
+    renameSession,
+    deleteSession,
     sendMessage
   }
 }

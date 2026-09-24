@@ -1,7 +1,13 @@
 import type { UISession, UIWorkspace } from "./types"
 
-/** A session's label: what the person first asked, falling back to a stub. */
+/**
+ * A session's label: the name it was given, else what the person first
+ * asked, else a stub.
+ */
 export function sessionTitle(session: UISession): string {
+  if (session.name?.trim()) {
+    return session.name.trim()
+  }
   const firstUser = session.messages.find(m => m.role === "user")
   if (firstUser && firstUser.role === "user" && firstUser.text.trim()) {
     return firstUser.text.trim().split("\n")[0]!

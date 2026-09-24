@@ -15,6 +15,8 @@ export const Message = new mongoose.Schema({
 
 export const Session = new mongoose.Schema({
   conversation: [Message],
+  /** What the person called this session. Absent means "no name given yet". */
+  name: String,
   workspace: { type: mongoose.Schema.Types.ObjectId, ref: 'Workspace' },
   /** Claude's conversation id, from before sessions could pick an agent. */
   anthropicSessionId: String,

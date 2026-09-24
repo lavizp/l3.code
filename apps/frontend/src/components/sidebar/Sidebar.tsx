@@ -16,7 +16,9 @@ export function Sidebar({
   onBrowseDirectory,
   onAddWorkspace,
   onSelectSession,
-  onNewSession
+  onNewSession,
+  onRenameSession,
+  onDeleteSession
 }: {
   workspaces: UIWorkspace[]
   activeSessionId: string | null
@@ -28,6 +30,8 @@ export function Sidebar({
   onAddWorkspace: (path: string) => void
   onSelectSession: (id: string) => void
   onNewSession: (workspaceId: string, agentId: string) => void
+  onRenameSession: (id: string, name: string) => void
+  onDeleteSession: (id: string) => void
 }) {
   const [expanded, setExpanded] = useState<string[]>([])
 
@@ -60,6 +64,8 @@ export function Sidebar({
               onToggle={() => w.id && toggle(w.id)}
               onSelectSession={onSelectSession}
               onNewSession={onNewSession}
+              onRenameSession={onRenameSession}
+              onDeleteSession={onDeleteSession}
             />
           ))
         )}

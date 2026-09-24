@@ -26,6 +26,8 @@ export function App() {
           onAddWorkspace={agent.addWorkspace}
           onSelectSession={agent.selectSession}
           onNewSession={agent.newSession}
+          onRenameSession={agent.renameSession}
+          onDeleteSession={agent.deleteSession}
         />
       </aside>
 

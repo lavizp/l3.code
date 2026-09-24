@@ -14,6 +14,18 @@ export const SessionCreated = z.object({
 })
 export type SessionCreatedType = z.infer<typeof SessionCreated>
 
+/** A session's name changed. `null` means it was cleared back to derived. */
+export const SessionRenamed = z.object({
+  id: z.string(),
+  name: z.string().nullable()
+})
+export type SessionRenamedType = z.infer<typeof SessionRenamed>
+
+export const SessionDeleted = z.object({
+  id: z.string()
+})
+export type SessionDeletedType = z.infer<typeof SessionDeleted>
+
 export const MessageAdded = z.object({
   id: z.string(),
   sessionId: z.string(),
@@ -75,6 +87,15 @@ export type OutgoingMessageType =
   | {
       type: 'session-created'
       payload: SessionCreatedType
+    }
+  | {
+      type: 'session-renamed'
+      payload: SessionRenamedType
+    }
+  /** The session is gone, along with everything that was said in it. */
+  | {
+      type: 'session-deleted'
+      payload: SessionDeletedType
     }
   | {
       type: 'message-added'
@@ -153,6 +174,8 @@ export type Session = {
   id: string,
   /** The agent that runs this session's turns. Fixed when it was created. */
   agentId: string,
+  /** The name the person gave it, or null to fall back to a derived title. */
+  name: string | null,
   messages: Message[]
 }
 

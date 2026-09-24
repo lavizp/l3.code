@@ -10,7 +10,9 @@ export function WorkspaceItem({
   agents,
   onToggle,
   onSelectSession,
-  onNewSession
+  onNewSession,
+  onRenameSession,
+  onDeleteSession
 }: {
   workspace: UIWorkspace
   open: boolean
@@ -19,6 +21,8 @@ export function WorkspaceItem({
   onToggle: () => void
   onSelectSession: (id: string) => void
   onNewSession: (workspaceId: string, agentId: string) => void
+  onRenameSession: (id: string, name: string) => void
+  onDeleteSession: (id: string) => void
 }) {
   // A workspace we just created has no server id yet, so it can't be opened.
   const pending = workspace.id === null
@@ -64,6 +68,8 @@ export function WorkspaceItem({
               session={session}
               active={session.id === activeSessionId}
               onSelect={() => onSelectSession(session.id)}
+              onRename={name => onRenameSession(session.id, name)}
+              onDelete={() => onDeleteSession(session.id)}
             />
           ))}
           <NewSession

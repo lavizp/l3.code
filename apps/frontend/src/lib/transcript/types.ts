@@ -23,6 +23,8 @@ export type UISession = {
   id: string
   /** The agent running this session, fixed when it was created. */
   agentId: string
+  /** What the person called it, or null to fall back to a derived title. */
+  name: string | null
   messages: UIMessage[]
 }
 

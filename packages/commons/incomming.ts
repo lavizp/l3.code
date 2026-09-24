@@ -24,6 +24,21 @@ export const ListDirectorySchema = z.object({
 })
 export type ListDirectorySchemaType = z.infer<typeof ListDirectorySchema>
 
+/**
+ * Rename a session. An empty name clears it, putting the row back to the
+ * title derived from what was first asked.
+ */
+export const RenameSessionSchema = z.object({
+  sessionId: z.string(),
+  name: z.string().trim().max(120)
+})
+export type RenameSessionSchemaType = z.infer<typeof RenameSessionSchema>
+
+export const DeleteSessionSchema = z.object({
+  sessionId: z.string()
+})
+export type DeleteSessionSchemaType = z.infer<typeof DeleteSessionSchema>
+
 export const AddMessageSchema = z.object({
   sessionId: z.string(),
   message: z.string()
@@ -38,6 +53,14 @@ export type IncommingMessageType =
   | {
       type: 'create-session'
       payload: CreateSessionSchemaType
+    }
+  | {
+      type: 'rename-session'
+      payload: RenameSessionSchemaType
+    }
+  | {
+      type: 'delete-session'
+      payload: DeleteSessionSchemaType
     }
   | {
       type: 'add-message'

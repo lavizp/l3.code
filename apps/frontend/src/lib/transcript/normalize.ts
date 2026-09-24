@@ -46,6 +46,7 @@ export function normalizeWorkspaces(workspaces: Workspace[]): UIWorkspace[] {
     sessions: (w.sessions ?? []).map(s => ({
       id: s.id,
       agentId: s.agentId,
+      name: s.name ?? null,
       messages: (s.messages ?? []).map(normalizeMessage)
     }))
   }))

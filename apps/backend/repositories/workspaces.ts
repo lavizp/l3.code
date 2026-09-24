@@ -52,6 +52,7 @@ export async function loadWorkspaces(): Promise<Workspace[]> {
     list.push({
       id: s._id.toString(),
       agentId: s.agent ?? config.defaultAgentId,
+      name: s.name ?? null,
       messages
     })
     sessionsByWorkspace.set(key, list)

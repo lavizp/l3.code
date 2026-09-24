@@ -1,11 +1,17 @@
-import { useState } from "react"
 import type { AgentSummary } from "commons/types"
 
+const CHIP =
+  "rounded-sm border border-transparent px-1.5 py-1 font-mono text-[12px] text-dim hover:border-rule hover:bg-raised hover:text-ink"
+
 /**
- * Starting a session means picking the agent that will run it. The choice is
- * permanent — an agent can't be swapped in later, because a conversation
- * lives inside the provider that has been having it — so the button opens
- * the list rather than quietly defaulting to one.
+ * Starting a session means picking the agent that will run it, and the
+ * choice is permanent — a conversation lives inside the provider that has
+ * been having it, so it can't be swapped in later.
+ *
+ * With a handful of agents there's nothing to gain by hiding that behind a
+ * menu: every choice sits on one row, and clicking one starts the session.
+ * No disclosure step means no cancelling and nothing shifting underneath
+ * the workspaces below.
  */
 export function NewSession({
   agents,
@@ -14,55 +20,41 @@ export function NewSession({
   agents: AgentSummary[]
   onCreate: (agentId: string) => void
 }) {
-  const [choosing, setChoosing] = useState(false)
-
-  function create(agentId: string) {
-    setChoosing(false)
-    onCreate(agentId)
-  }
-
-  // With a single agent there is nothing to decide.
-  if (agents.length < 2) {
+  if (agents.length === 0) {
     return (
-      <button
-        className="w-full px-2 py-1.5 text-left font-mono text-[12px] text-dim hover:text-ink disabled:opacity-40"
-        onClick={() => agents[0] && create(agents[0].id)}
-        disabled={agents.length === 0}
-      >
-        + New session
-      </button>
+      <p className="px-2 py-1.5 font-mono text-[12px] text-dim/60">
+        No agents to run a session.
+      </p>
     )
   }
 
-  if (!choosing) {
+  // With one agent there is nothing to choose between, so don't make anyone
+  // read its name to click it.
+  if (agents.length === 1) {
     return (
-      <button
-        className="w-full px-2 py-1.5 text-left font-mono text-[12px] text-dim hover:text-ink"
-        onClick={() => setChoosing(true)}
-      >
-        + New session
-      </button>
+      <div className="mt-0.5 px-1">
+        <button
+          className={`${CHIP} w-full text-left`}
+          onClick={() => onCreate(agents[0]!.id)}
+        >
+          <span className="text-dim">+</span> New session
+        </button>
+      </div>
     )
   }
 
   return (
-    <div className="py-1">
-      <p className="px-2 font-mono text-[11px] text-dim">New session with</p>
+    <div className="mt-0.5 flex flex-wrap gap-1 px-1">
       {agents.map(agent => (
         <button
           key={agent.id}
-          className="w-full px-2 py-1.5 text-left font-mono text-[12px] text-ink hover:bg-raised"
-          onClick={() => create(agent.id)}
+          className={CHIP}
+          title={`New session with ${agent.label}`}
+          onClick={() => onCreate(agent.id)}
         >
-          {agent.label}
+          <span className="text-dim">+</span> {agent.label}
         </button>
       ))}
-      <button
-        className="w-full px-2 py-1 text-left font-mono text-[11px] text-dim hover:text-ink"
-        onClick={() => setChoosing(false)}
-      >
-        Cancel
-      </button>
     </div>
   )
 }

@@ -3,6 +3,7 @@ import {
   FRONTMATTER_SUPPORT,
   type ProviderSummary,
   type Skill,
+  type SkillOrigin,
   type SkillSource
 } from "commons/types"
 
@@ -60,9 +61,9 @@ export function SkillEditor({
         </div>
 
         <div className="flex shrink-0 items-center gap-3">
-          {!editable && (
+          {!editable && skill && (
             <span className="font-mono text-[11px] text-dim">
-              Read-only — the agent owns this one
+              Read-only — {whoOwns(skill.origin, skill.pluginId)}
             </span>
           )}
           {editable && (
@@ -99,6 +100,27 @@ export function SkillEditor({
       <Honoured keys={keys} providers={providers} />
     </div>
   )
+}
+
+/**
+ * Why a skill can't be edited here, said as what would happen if it could.
+ *
+ * "Read-only" on its own reads as this app being unable to. It isn't — the
+ * file is writable. The reason is that something else replaces it wholesale
+ * on a schedule nobody here controls, so an edit would look like it took and
+ * then quietly vanish.
+ */
+function whoOwns(origin: SkillOrigin, pluginId: string | null): string {
+  switch (origin) {
+    case "plugin":
+      return `the ${pluginId ?? "plugin"} plugin replaces this when it updates`
+    case "synced":
+      return "synced from your account, and re-downloaded on a timer"
+    case "bundled":
+      return "shipped with the agent, and replaced when it updates"
+    default:
+      return "owned elsewhere"
+  }
 }
 
 /** Where this skill is read from, per agent. */

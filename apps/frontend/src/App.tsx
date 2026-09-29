@@ -83,6 +83,7 @@ export function App() {
         {creating ? (
           <NewSkillForm
             destinations={pane.destinations}
+            providers={pane.providers}
             busy={pane.saving}
             onCreate={create}
             onCancel={() => setCreating(false)}

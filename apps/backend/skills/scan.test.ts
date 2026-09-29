@@ -36,12 +36,12 @@ async function skillAt(dir: string): Promise<void> {
 }
 
 test("finds skills at the depth asked for", async () => {
-  const { sightings } = await scanRoot(root, { depth: 1, editable: true })
+  const { sightings } = await scanRoot(root, { depth: 1, origin: "yours" })
   expect(names(sightings)).toEqual(["linked", "top-level"])
 })
 
 test("goes deeper when told to, without losing the shallow ones", async () => {
-  const { sightings } = await scanRoot(root, { depth: 2, editable: true })
+  const { sightings } = await scanRoot(root, { depth: 2, origin: "yours" })
   expect(names(sightings)).toEqual(["linked", "nested", "top-level"])
 })
 
@@ -49,7 +49,7 @@ test("follows a symlink into a shared store", async () => {
   // This is how a skill reaches an agent that won't read the shared store
   // itself, so a scan that skipped symlinks would miss every skill this app
   // writes.
-  const { sightings } = await scanRoot(root, { depth: 1, editable: true })
+  const { sightings } = await scanRoot(root, { depth: 1, origin: "yours" })
   expect(sightings.map(s => s.path)).toContain(join(root, "linked", "SKILL.md"))
 })
 
@@ -58,7 +58,7 @@ test("a root that isn't there is not a problem worth reporting", async () => {
   // bury the ones that are genuinely broken.
   const { sightings, problems } = await scanRoot(join(root, "nowhere"), {
     depth: 2,
-    editable: true
+    origin: "yours"
   })
   expect(sightings).toEqual([])
   expect(problems).toEqual([])
@@ -67,11 +67,11 @@ test("a root that isn't there is not a problem worth reporting", async () => {
 test("carries the plugin a skill belongs to", async () => {
   const { sightings } = await scanRoot(root, {
     depth: 1,
-    editable: false,
+    origin: "plugin",
     pluginId: () => "some-plugin@marketplace"
   })
   expect(sightings.every(s => s.pluginId === "some-plugin@marketplace")).toBe(true)
-  expect(sightings.every(s => !s.editable)).toBe(true)
+  expect(sightings.every(s => s.origin === "plugin")).toBe(true)
 })
 
 function names(sightings: { path: string }[]): string[] {

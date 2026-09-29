@@ -9,4 +9,4 @@ registerProvider(claudeCode)
 registerProvider(codex)
 
 export { getProvider, listProviders, registerProvider } from "./registry"
-export type { Problem, Scope, Sighting, SkillProvider, WritableScope } from "./types"
+export type { Problem, Sighting, SkillProvider, WritableScope } from "./types"

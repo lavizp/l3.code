@@ -2,6 +2,7 @@ import { homedir } from "node:os"
 import { basename, join } from "node:path"
 import { listCodexSkills } from "../services/codex-app-server"
 import { link, unlink } from "../services/links"
+import type { SkillOrigin } from "commons/types"
 import type { Problem, SkillProvider, Sighting, WritableScope } from "./types"
 
 /**
@@ -18,11 +19,14 @@ import type { Problem, SkillProvider, Sighting, WritableScope } from "./types"
 export const codex: SkillProvider = {
   id: "codex",
   label: "Codex",
+  // Both agents' names begin with a C, so the badge can't.
+  short: "CX",
   // Codex reads a project's `.agents/skills` natively, which is why that is
   // the directory this app writes to. Its home directory is a different
   // story — see `linkPath`.
   readsSharedRoot: true,
   probe,
+  ownRoot,
   list,
   project,
   unproject
@@ -53,12 +57,8 @@ async function list(
     for (const skill of entry.skills) {
       sightings.push({
         path: skill.path,
-        pluginId: skill.pluginId,
-        // `system` is what Codex ships with and `admin` is what an
-        // organisation pushed down; both are replaced wholesale on update.
-        // A plugin owns its own skills for the same reason.
-        editable:
-          skill.pluginId === null && skill.scope !== "system" && skill.scope !== "admin"
+        origin: originOf(skill.scope, skill.pluginId),
+        pluginId: skill.pluginId
       })
     }
     for (const error of entry.errors) {
@@ -70,7 +70,41 @@ async function list(
 }
 
 /**
- * Where a symlink for a skill belongs, or null when none is needed.
+ * What Codex's own scope word means in this app's terms.
+ *
+ * `system` is what Codex ships with and `admin` is what an organisation
+ * pushed down; both are replaced wholesale on update, as are a plugin's own
+ * skills. What's left is the person's.
+ */
+function originOf(
+  scope: "user" | "repo" | "system" | "admin",
+  pluginId: string | null
+): SkillOrigin {
+  if (pluginId) {
+    return "plugin"
+  }
+  return scope === "system" || scope === "admin" ? "bundled" : "yours"
+}
+
+/** `$CODEX_HOME` or `~/.codex`, whichever this machine is using. */
+function codexHome(): string {
+  return process.env.CODEX_HOME || join(homedir(), ".codex")
+}
+
+/**
+ * `.codex/skills` — where this agent keeps its own. Codex reads it at both
+ * scopes, and no other agent reads it at either, so a skill written here is
+ * Codex's alone.
+ */
+function ownRoot(scope: WritableScope, cwd?: string): string | null {
+  if (scope === "project") {
+    return cwd ? join(cwd, ".codex", "skills") : null
+  }
+  return join(codexHome(), "skills")
+}
+
+/**
+ * Where a symlink for a *shared* skill belongs, or null when none is needed.
  *
  * At project scope Codex reads `.agents/skills` itself, so there is nothing
  * to do. At user scope it doesn't: its home root is `~/.codex/skills`, and
@@ -81,8 +115,7 @@ function linkPath(name: string, scope: WritableScope): string | null {
   if (scope === "project") {
     return null
   }
-  const home = process.env.CODEX_HOME || join(homedir(), ".codex")
-  return join(home, "skills", name)
+  return join(ownRoot("user")!, name)
 }
 
 async function project(dir: string, scope: WritableScope): Promise<void> {

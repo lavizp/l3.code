@@ -10,9 +10,13 @@ Skills are the part of a coding agent somebody taught it: a directory
 holding a `SKILL.md`, YAML frontmatter naming and describing it, markdown
 underneath. [Claude Code](https://claude.com/claude-code) and
 [Codex](https://developers.openai.com/codex) read the same shape and
-disagree only about where to look. So a skill written here is written
-**once**, to `.agents/skills`, and linked into each agent's own directory —
-one file to edit rather than a copy per agent that drifts.
+disagree only about where to look.
+
+So a skill written here is written for whoever it's for. A shared one goes
+**once** into `.agents/skills` and is linked into each agent's own directory
+— one file to edit rather than a copy per agent that drifts. One that leans
+on a single agent's tools goes straight into that agent's folder, where no
+other agent looks.
 
 ## What it's for
 
@@ -75,9 +79,12 @@ The folder picker browses the *backend's* filesystem, not yours: a browser
 never discloses an absolute path, and an absolute path is what the agents
 need. Run the two on the same machine.
 
-## How a skill gets written
+## Who reads what
 
-One file, then a link per agent that needs one:
+Two questions when you write a skill, and the pane asks both: **how far it
+travels** — this repo, or everywhere — and **who reads it**.
+
+Shared, one file and a link per agent that needs one:
 
 ```
 <project>/.agents/skills/<name>/SKILL.md   the file you edit
@@ -89,10 +96,25 @@ One file, then a link per agent that needs one:
 ~/.codex/skills/<name>    ── symlink ──┘
 ```
 
+For one agent, straight into that agent's own directory, no link at all:
+
+```
+<project>/.claude/skills/<name>/SKILL.md   Claude Code only
+<project>/.codex/skills/<name>/SKILL.md    Codex only
+~/.claude/skills/<name>/SKILL.md           Claude Code, every project
+~/.codex/skills/<name>/SKILL.md            Codex, every project
+```
+
 `.agents/skills` is the one directory more than one agent has agreed to look
-in, which is why it's the one written to. Codex reads a project's copy
+in, which is why it's where the shared ones go. Codex reads a project's copy
 natively; Claude Code doesn't, and gets a relative symlink instead — relative
 so a repo that's cloned or moved keeps working.
+
+Which of the three a skill is can't be seen from the disk afterwards, so the
+list says it: every row carries `shared`, `Claude Code only` or `Codex only`,
+with a badge per agent, and the filter above the list narrows to one agent's
+view. The badges read `CC` and `CX` rather than initials — both agents' names
+begin with a C.
 
 Project skills are files in your repo. Whether to commit the `.claude/skills`
 symlinks alongside them is your call: committing them means a fresh clone
@@ -132,8 +154,10 @@ import type { SkillProvider } from "./types"
 export const cursor: SkillProvider = {
   id: "cursor",
   label: "Cursor",
+  short: "CU",
   readsSharedRoot: false,
   probe: async () => ({ available: Boolean(Bun.which("cursor")) }),
+  ownRoot: (scope, cwd) => join(scope === "project" ? cwd! : homedir(), ".cursor", "skills"),
   list: async cwd => ({ sightings: [], problems: [] }),
   project: async (dir, scope, cwd) => {},
   unproject: async (dir, scope, cwd) => {}
@@ -141,11 +165,12 @@ export const cursor: SkillProvider = {
 ```
 
 Register it in [skills/index.ts](apps/backend/skills/index.ts) and it appears
-in the sidebar, in the badges beside every skill, and in the frontmatter
-table. A provider says where its agent looks and links a directory into
-place; it deliberately doesn't parse `SKILL.md`, because two agents routinely
-find the same file and parsing once after deduplication is what keeps the
-list one row per skill.
+in the sidebar, as a badge beside every skill, as a filter above the list,
+as a "Cursor only" choice when writing one, and in the frontmatter table. A
+provider says where its agent looks, where that agent keeps its own, and how
+to link a shared directory into place; it deliberately doesn't parse
+`SKILL.md`, because two agents routinely find the same file and parsing once
+after deduplication is what keeps the list one row per skill.
 
 The two built in take different routes to the same answer, which is the point
 of the seam:
@@ -160,15 +185,27 @@ of the seam:
   are live depends on config this app doesn't read, so `skills/list` answers
   with the path, the scope and the owning plugin for each.
 
-## Scopes
+## Scope and origin
 
-Three, and the grouping is most of the point — "why did the agent do that" is
-a different conversation for each:
+Two separate axes, kept separate on purpose. **Scope** is how far a skill
+travels: `project` or `user`. **Origin** is who put it there, and it's what
+the list groups by — "why did the agent do that" is a different conversation
+for each, and only the first two are anybody's to change:
 
-- **This project** — in the repo, travels with it.
-- **Personal** — in your home directory, follows you everywhere.
-- **Built in** — shipped with the agent, or with a plugin, or synced from an
-  account. Shown, never written: the next update would overwrite an edit.
+- **This project** — yours, in the repo.
+- **Personal** — yours, in your home directory.
+- **From plugins** — provided by an installed plugin, replaced when it updates.
+- **Synced from your account** — re-downloaded on a timer, so an edit has a
+  short life.
+- **The agent's own** — shipped with the agent itself.
+
+The last three are shown and never written. The editor says which, and what
+would happen to an edit, rather than a bare "read-only" that reads as this
+app being unable to.
+
+Collapsing these into one axis is the mistake this replaced: a plugin's
+skills install under your home directory and so do your own, so a list keyed
+on location alone can't tell the agent's defaults from the ones you wrote.
 
 ## Configuration
 

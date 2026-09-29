@@ -43,8 +43,9 @@ errors.ts                  FailureError, and whatever was thrown as a Failure
 
 ## The seam
 
-`SkillProvider` does two things: say where its agent looks for skills, and
-make a directory in the shared store appear in one of those places. It does
+`SkillProvider` says where its agent looks for skills, where that agent keeps
+its own, and how to make a directory in the shared store appear in one of
+those places. It does
 *not* parse `SKILL.md` — two agents routinely find the same file by different
 routes, and parsing once, centrally, after the paths have been resolved and
 grouped is the only way the list ends up with one row per skill instead of
@@ -55,10 +56,12 @@ upstream of `skills/` changes.
 
 ## Writing
 
-A new skill is written once, to `.agents/skills`, then handed to every
-provider to link into place. `.agents/skills` is the one directory more than
-one agent reads by itself, so it is the one written to; the providers that
-don't read it get a relative symlink.
+A new skill carries a target: `"shared"`, or the id of the one agent it is
+for. Shared goes to `.agents/skills` — the one directory more than one agent
+reads by itself — and is then handed to every provider to link into place;
+the ones that don't read it get a relative symlink. A target naming an agent
+goes straight to that provider's `ownRoot`, and nothing is linked, because
+linking it anywhere else is exactly what was not asked for.
 
 Two rules in [links.ts](services/links.ts) bound what this does to somebody's
 `~/.claude` and `~/.codex`: it creates only links, and removes only links it

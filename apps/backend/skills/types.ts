@@ -13,11 +13,10 @@
  * list ends up with one row per skill instead of one per sighting.
  */
 
-/** Where a skill lives, from this app's point of view rather than an agent's. */
-export type Scope = "project" | "user" | "system"
+import type { SkillOrigin, SkillScope } from "commons/types"
 
-/** The two scopes this app will write to. `system` belongs to the agent. */
-export type WritableScope = "project" | "user"
+/** The scopes this app will write to. Both of them, as it happens. */
+export type WritableScope = SkillScope
 
 /** One agent's sighting of one `SKILL.md`. */
 export type Sighting = {
@@ -26,14 +25,14 @@ export type Sighting = {
    * which is exactly what projection creates. Resolved centrally.
    */
   path: string
+  /**
+   * Who put it there. Only `yours` is ever written to: everything else is
+   * replaced wholesale the next time the agent, a plugin or an account sync
+   * updates, so an edit would be quietly undone.
+   */
+  origin: SkillOrigin
   /** The plugin that owns it, when the agent says so. */
   pluginId: string | null
-  /**
-   * Whether this app may write to it. False for anything the agent owns and
-   * will overwrite on its next update: bundled skills, plugin skills, and
-   * the ones synced down from an account.
-   */
-  editable: boolean
 }
 
 export type Problem = {
@@ -57,8 +56,18 @@ export interface SkillProvider {
    */
   readonly readsSharedRoot: boolean
 
+  /** Two or three characters standing for this agent in a badge. */
+  readonly short: string
+
   /** Whether this agent is installed and usable here, and why not if not. */
   probe(): Promise<{ available: boolean; detail?: string }>
+
+  /**
+   * Where a skill written for this agent *alone* goes — its own directory,
+   * which no other agent reads. Null when the agent has no such place at
+   * that scope.
+   */
+  ownRoot(scope: WritableScope, cwd?: string): string | null
 
   /**
    * Every `SKILL.md` this agent can currently see. `cwd` is the project in

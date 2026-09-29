@@ -1,5 +1,6 @@
 import { readdir } from "node:fs/promises"
 import { join } from "node:path"
+import type { SkillOrigin } from "commons/types"
 import type { Problem, Sighting } from "./types"
 
 /** The file that makes a directory a skill. */
@@ -21,7 +22,11 @@ export const SKILL_FILE = "SKILL.md"
  */
 export async function scanRoot(
   root: string,
-  options: { depth?: number; editable: boolean; pluginId?: (dir: string) => string | null }
+  options: {
+    depth?: number
+    origin: SkillOrigin
+    pluginId?: (dir: string) => string | null
+  }
 ): Promise<{ sightings: Sighting[]; problems: Problem[] }> {
   const sightings: Sighting[] = []
   const problems: Problem[] = []
@@ -43,8 +48,8 @@ export async function scanRoot(
     if (entries.some(e => e.name === SKILL_FILE && !e.isDirectory())) {
       sightings.push({
         path: join(dir, SKILL_FILE),
-        pluginId: options.pluginId?.(dir) ?? null,
-        editable: options.editable
+        origin: options.origin,
+        pluginId: options.pluginId?.(dir) ?? null
       })
       return
     }

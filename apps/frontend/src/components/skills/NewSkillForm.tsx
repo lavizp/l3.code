@@ -1,43 +1,56 @@
 import { useState } from "react"
-import type { SkillDestination, SkillScope } from "commons/types"
+import type { ProviderSummary, SkillDestination, SkillScope } from "commons/types"
 
 /**
  * Where a new skill goes, decided before it's written.
  *
- * The scope isn't a filing detail — it's the only thing that decides which
- * agents will ever read it, so it's the first question, and the form says
- * what each answer means in the place the answer is given.
+ * Two questions, and neither is a filing detail. How far it travels — this
+ * repo or everywhere — and who reads it once it's there. The second is the
+ * one people get wrong, because a skill for every agent and a skill for one
+ * differ only by which directory they sit in, and that is invisible
+ * afterwards. Both are asked here, where the answer is still cheap.
  */
 export function NewSkillForm({
   destinations,
+  providers,
   busy,
   onCreate,
   onCancel
 }: {
   destinations: SkillDestination[]
+  providers: ProviderSummary[]
   busy: boolean
-  onCreate: (input: { scope: SkillScope; name: string; description: string }) => void
+  onCreate: (input: {
+    scope: SkillScope
+    target: string
+    name: string
+    description: string
+  }) => void
   onCancel: () => void
 }) {
   const [scope, setScope] = useState<SkillScope>(destinations[0]?.scope ?? "user")
+  const [target, setTarget] = useState("shared")
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
 
-  const chosen = destinations.find(d => d.scope === scope)
+  // Scopes in the order the server offered them, without repeating one.
+  const scopes = [...new Set(destinations.map(d => d.scope))]
+  const forScope = destinations.filter(d => d.scope === scope)
+  const chosen = forScope.find(d => d.target === target) ?? forScope[0]
   // The server enforces this too; saying it here means finding out before
   // typing a description rather than after.
   const nameProblem =
     name && !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(name)
       ? "Lowercase letters, digits and dashes."
       : null
-  const ready = name && !nameProblem && description.trim() && !busy
+  const ready = name && !nameProblem && description.trim() && !busy && chosen
 
   return (
     <form
       onSubmit={e => {
         e.preventDefault()
-        if (ready) {
-          onCreate({ scope, name, description: description.trim() })
+        if (ready && chosen) {
+          onCreate({ scope, target: chosen.target, name, description: description.trim() })
         }
       }}
       className="flex h-full flex-col gap-4 overflow-y-auto px-6 py-5"
@@ -45,12 +58,12 @@ export function NewSkillForm({
       <h1 className="font-mono text-[14px] text-ink">New skill</h1>
 
       <fieldset className="flex flex-col gap-1.5">
-        <legend className="pb-1 font-mono text-[11px] text-dim">Where it lives</legend>
-        {destinations.map(destination => (
+        <legend className="pb-1 font-mono text-[11px] text-dim">How far it travels</legend>
+        {scopes.map(option => (
           <label
-            key={destination.scope}
+            key={option}
             className={`flex cursor-pointer gap-2.5 rounded border px-3 py-2 ${
-              scope === destination.scope
+              scope === option
                 ? "border-signal/40 bg-signal/5"
                 : "border-rule hover:bg-raised/50"
             }`}
@@ -59,14 +72,47 @@ export function NewSkillForm({
               type="radio"
               name="scope"
               className="mt-1 accent-signal"
-              checked={scope === destination.scope}
-              onChange={() => setScope(destination.scope)}
+              checked={scope === option}
+              onChange={() => setScope(option)}
             />
             <span className="min-w-0">
               <span className="block font-mono text-[12px] text-ink">
-                {destination.scope === "project"
-                  ? "This project"
-                  : "Personal — every project"}
+                {option === "project" ? "This project only" : "Every project"}
+              </span>
+              <span className="mt-0.5 block text-[11px] leading-snug text-dim">
+                {option === "project"
+                  ? "A file in the repo, so it travels with it."
+                  : "Kept in your home directory, so it follows you."}
+              </span>
+            </span>
+          </label>
+        ))}
+      </fieldset>
+
+      <fieldset className="flex flex-col gap-1.5">
+        <legend className="pb-1 font-mono text-[11px] text-dim">Who reads it</legend>
+        {forScope.map(destination => (
+          <label
+            key={destination.target}
+            className={`flex cursor-pointer gap-2.5 rounded border px-3 py-2 ${
+              chosen?.target === destination.target
+                ? "border-signal/40 bg-signal/5"
+                : "border-rule hover:bg-raised/50"
+            }`}
+          >
+            <input
+              type="radio"
+              name="target"
+              className="mt-1 accent-signal"
+              checked={chosen?.target === destination.target}
+              onChange={() => setTarget(destination.target)}
+            />
+            <span className="min-w-0">
+              <span className="block font-mono text-[12px] text-ink">
+                {destination.label}
+                {destination.reaches.some(
+                  id => providers.find(p => p.id === id)?.available === false
+                ) && <span className="ml-2 text-dim">not installed here</span>}
               </span>
               <span className="truncate-path mt-0.5 block font-mono text-[11px] text-dim">
                 {destination.path}
@@ -107,10 +153,11 @@ export function NewSkillForm({
 
       {chosen && (
         <p className="text-[12px] leading-snug text-dim">
-          Written once to{" "}
-          <span className="font-mono text-ink/70">.agents/skills</span> and linked
-          into place for {chosen.reaches.length} agent
-          {chosen.reaches.length === 1 ? "" : "s"}.
+          {chosen.target === "shared"
+            ? `Written once and linked into place for ${chosen.reaches.length} agent${
+                chosen.reaches.length === 1 ? "" : "s"
+              }, so there's one file to edit rather than a copy each.`
+            : "Written straight into that agent's own folder. No other agent looks there."}
         </p>
       )}
 

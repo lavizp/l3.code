@@ -18,10 +18,13 @@ import type { Problem, SkillProvider, Sighting, WritableScope } from "./types"
 export const claudeCode: SkillProvider = {
   id: "claude-code",
   label: "Claude Code",
+  // Both agents' names begin with a C, so the badge can't.
+  short: "CC",
   // It reads `.claude/skills`, and nothing else. A skill in the shared store
   // reaches it through a symlink.
   readsSharedRoot: false,
   probe,
+  ownRoot,
   list,
   project,
   unproject
@@ -44,11 +47,13 @@ async function list(
 
   const roots = [
     // The person's own skills, and the only user-scope root they write to.
-    { root: join(home, ".claude", "skills"), depth: 1, editable: true },
+    { root: ownRoot("user")!, depth: 1, origin: "yours" as const },
     // Skills synced down from a claude.ai account. Re-downloaded every ten
     // minutes, so anything written here is on a timer: <bucket>/<name>.
-    { root: join(home, ".claude", "skills", "synced"), depth: 2, editable: false },
-    ...(cwd ? [{ root: join(cwd, ".claude", "skills"), depth: 1, editable: true }] : []),
+    { root: join(home, ".claude", "skills", "synced"), depth: 2, origin: "synced" as const },
+    ...(cwd
+      ? [{ root: ownRoot("project", cwd)!, depth: 1, origin: "yours" as const }]
+      : []),
     ...(await pluginRoots(home))
   ]
 
@@ -56,7 +61,7 @@ async function list(
     roots.map(r =>
       scanRoot(r.root, {
         depth: r.depth,
-        editable: r.editable,
+        origin: r.origin,
         pluginId: () => ("pluginId" in r ? (r.pluginId as string) : null)
       })
     )
@@ -77,7 +82,7 @@ async function list(
  * is actually live, which is the only copy worth showing.
  */
 async function pluginRoots(home: string): Promise<
-  { root: string; depth: number; editable: boolean; pluginId: string }[]
+  { root: string; depth: number; origin: "plugin"; pluginId: string }[]
 > {
   const [installed, disabled] = await Promise.all([
     readJson<{
@@ -95,7 +100,7 @@ async function pluginRoots(home: string): Promise<
         .map(path => ({
           root: join(path, "skills"),
           depth: 1,
-          editable: false,
+          origin: "plugin" as const,
           pluginId: id
         }))
     )
@@ -123,13 +128,20 @@ async function readJson<T>(path: string): Promise<T | null> {
   }
 }
 
-/** `<scope root>/.claude/skills/<name>` — where a symlink for `dir` belongs. */
-function linkPath(name: string, scope: WritableScope, cwd?: string): string | null {
+/**
+ * `.claude/skills` — where this agent keeps its own, and the only directory
+ * it reads that this app writes to. A skill written here is Claude Code's
+ * alone; Codex has no reason to look in it and doesn't.
+ */
+function ownRoot(scope: WritableScope, cwd?: string): string | null {
   const base = scope === "project" ? cwd : homedir()
-  if (!base) {
-    return null
-  }
-  return join(base, ".claude", "skills", name)
+  return base ? join(base, ".claude", "skills") : null
+}
+
+/** Where a symlink for a shared skill named `name` belongs. */
+function linkPath(name: string, scope: WritableScope, cwd?: string): string | null {
+  const root = ownRoot(scope, cwd)
+  return root ? join(root, name) : null
 }
 
 async function project(dir: string, scope: WritableScope, cwd?: string): Promise<void> {

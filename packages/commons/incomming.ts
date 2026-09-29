@@ -49,6 +49,12 @@ export const CreateSkillSchema = z.object({
   /** Required for `project` scope, meaningless for `user`. */
   workspaceId: z.string().optional(),
   scope: z.enum(["project", "user"]),
+  /**
+   * `"shared"`, or the id of the one agent this skill is for. It decides
+   * which directory the file goes in, and that directory is the only thing
+   * that decides who will ever read it.
+   */
+  target: z.string().min(1),
   name: SKILL_NAME,
   description: z.string().trim().min(1).max(1024),
   /** The markdown under the frontmatter. Empty means the starter template. */

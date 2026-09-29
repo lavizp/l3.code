@@ -42,7 +42,13 @@ export type SkillPane = {
   selectSkill: (path: string | null) => void
   addWorkspace: (path: string) => void
   browseDirectory: (path?: string) => void
-  createSkill: (input: { scope: SkillScope; name: string; description: string }) => void
+  createSkill: (input: {
+    scope: SkillScope
+    /** `"shared"`, or the id of the one agent this skill is for. */
+    target: string
+    name: string
+    description: string
+  }) => void
   saveSkill: (raw: string) => void
   deleteSkill: (path: string) => void
   refresh: () => void
@@ -217,17 +223,16 @@ export function useSkillPane(): SkillPane {
 
   function createSkill(input: {
     scope: SkillScope
+    target: string
     name: string
     description: string
   }) {
-    if (input.scope === "system") {
-      return
-    }
     setSaving(true)
     const sent = send({
       type: "create-skill",
       payload: {
         scope: input.scope,
+        target: input.target,
         name: input.name,
         description: input.description,
         workspaceId: input.scope === "project" ? (workspaceId ?? undefined) : undefined

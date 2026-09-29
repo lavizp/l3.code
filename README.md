@@ -1,45 +1,59 @@
 # l3.code
 
-A self-hosted web UI for coding agents. Point it at a folder on your machine,
-start a session, and chat with [Claude Code](https://claude.com/claude-code) or
-[Codex](https://developers.openai.com/codex) — the reply streams back token by
-token, with every tool call and its result visible inline.
+A self-hosted web UI for the skills your coding agents read. Point it at a
+folder, and every `SKILL.md` on the machine shows up in one list — the ones
+in that repo, the ones in your home directory, and the ones the agents
+themselves shipped with — with, beside each, which agents can actually see
+it.
 
-The agent itself is a swappable part. A session picks its agent when it's
-created and keeps it for life; everything above the `AgentProvider` seam —
-persistence, the websocket protocol, the UI — is written against one
-provider-neutral event type, so adding Gemini or a local model is one new file.
+Skills are the part of a coding agent somebody taught it: a directory
+holding a `SKILL.md`, YAML frontmatter naming and describing it, markdown
+underneath. [Claude Code](https://claude.com/claude-code) and
+[Codex](https://developers.openai.com/codex) read the same shape and
+disagree only about where to look.
 
-## How it fits together
+So a skill written here is written for whoever it's for. A shared one goes
+**once** into `.agents/skills` and is linked into each agent's own directory
+— one file to edit rather than a copy per agent that drifts. One that leans
+on a single agent's tools goes straight into that agent's folder, where no
+other agent looks.
+
+## What it's for
+
+Skills accumulate in places nobody looks at: `~/.claude/skills`,
+`~/.codex/skills`, `.claude/skills` in one repo, a plugin cache four levels
+deep. A skill sitting in the right folder for one agent and invisible to
+another looks identical on disk. The only way to tell is to ask each agent,
+and that answer belongs next to the skill.
 
 ```
-browser                          apps/backend                     your machine
-┌──────────────┐   websocket    ┌────────────────┐   AgentEvent   ┌──────────┐
-│  React UI    │ ─────────────► │ router         │ ◄───────────── │ agent    │
-│  transcript  │                │ turn-runner    │                │ provider │
-│              │ ◄───────────── │ agents/*       │                │ (SDK)    │
-└──────────────┘  block-delta   └────────────────┘                └──────────┘
-                  tool-start            │                              │
-                  tool-end              ▼                              ▼
-                                    MongoDB                     workspace folder
+browser                       apps/backend                        your machine
+┌──────────────┐  websocket  ┌────────────────┐    Sighting[]    ┌───────────┐
+│  skill pane  │ ──────────► │ router         │ ◄─────────────── │ skill     │
+│  list/editor │             │ services/skills│                  │ provider  │
+│              │ ◄────────── │ skills/*       │ ───────────────► │           │
+└──────────────┘  Skill[]    └────────────────┘   write + link   └───────────┘
+                                     │                                 │
+                                     ▼                                 ▼
+                                  MongoDB                     .agents/skills/
+                              (the folder list)               ~/.claude/skills/
+                                                              ~/.codex/skills/
 ```
 
-One turn: the client sends `add-message`; the backend persists it, echoes it
-back immediately, then runs the session's agent in the workspace directory and
-forwards its stream as `block-start` / `block-delta` / `tool-start` /
-`tool-end`, closing with `turn-ended`. Nothing waits for the turn to finish
-before the client hears about it. On the way out, the turn is folded into a
-list of blocks and saved, so reloading replays the same transcript.
+Each provider says where its agent looks; the paths it reports are resolved
+and grouped by real file, so one skill two agents found by two routes is one
+row with two badges rather than two rows. The `SKILL.md` is parsed once,
+centrally, after that grouping.
 
 ## Quick start
 
 Prerequisites:
 
 - [Bun](https://bun.com) 1.4+ and Node 24+
-- A MongoDB instance (local or Atlas)
-- Whichever agent you plan to run, authenticated on this machine — `claude`
-  logged in for Claude Code, `codex login` (or `CODEX_API_KEY`) for Codex.
-  Both adapters pick up ambient credentials; there's nothing to configure here.
+- A MongoDB instance (local or Atlas) — it holds the list of projects, and
+  nothing else
+- Whichever agents you want listed, installed on this machine. Nothing needs
+  to be signed in: reading skills is a filesystem question.
 
 ```bash
 bun install
@@ -57,141 +71,215 @@ Then run both apps:
 bun dev
 ```
 
-That's `turbo run dev` — backend on `:8080`, frontend on Bun's dev server with
-HMR. Open the frontend, choose a folder, start a session, and send a message.
+That's `turbo run dev` — backend on `:8080`, frontend on Bun's dev server
+with HMR. Open the frontend, and the skills you carry everywhere are already
+listed; choose a folder to add a project's own.
 
 The folder picker browses the *backend's* filesystem, not yours: a browser
-never discloses an absolute path, and an absolute path is what the agent needs
-for its working directory. Run the two on the same machine.
+never discloses an absolute path, and an absolute path is what the agents
+need. Run the two on the same machine.
 
-To run one side only:
+## Who reads what
 
-```bash
-bun dev --filter=backend
+Two questions when you write a skill, and the pane asks both: **how far it
+travels** — this repo, or everywhere — and **who reads it**.
+
+Shared, one file and a link per agent that needs one:
+
 ```
+<project>/.agents/skills/<name>/SKILL.md   the file you edit
+<project>/.claude/skills/<name>   ── symlink ──┘   (Claude Code)
+                                                   (Codex reads .agents itself)
+
+~/.agents/skills/<name>/SKILL.md           personal, every project
+~/.claude/skills/<name>   ── symlink ──┐
+~/.codex/skills/<name>    ── symlink ──┘
+```
+
+For one agent, straight into that agent's own directory, no link at all:
+
+```
+<project>/.claude/skills/<name>/SKILL.md   Claude Code only
+<project>/.codex/skills/<name>/SKILL.md    Codex only
+~/.claude/skills/<name>/SKILL.md           Claude Code, every project
+~/.codex/skills/<name>/SKILL.md            Codex, every project
+```
+
+`.agents/skills` is the one directory more than one agent has agreed to look
+in, which is why it's where the shared ones go. Codex reads a project's copy
+natively; Claude Code doesn't, and gets a relative symlink instead — relative
+so a repo that's cloned or moved keeps working.
+
+Which of the three a skill is can't be seen from the disk afterwards, so the
+list says it: every row carries `shared`, `Claude Code only` or `Codex only`,
+with a badge per agent, and the filter above the list narrows to one agent's
+view. The badges read `CC` and `CX` rather than initials — both agents' names
+begin with a C.
+
+Project skills are files in your repo. Whether to commit the `.claude/skills`
+symlinks alongside them is your call: committing them means a fresh clone
+works for Claude Code without opening this app, and costs a directory of
+symlinks in the tree.
+
+## Frontmatter
+
+Both agents ignore frontmatter keys they don't recognise, in silence. That's
+what lets one file serve all of them — and it's also why `allowed-tools`
+looks like it works everywhere when it works in exactly one place. The editor
+says which agent acts on each key that's present:
+
+| Key                        | Claude Code | Codex |
+| -------------------------- | ----------- | ----- |
+| `name`, `description`      | ✓           | ✓     |
+| `allowed-tools`            | ✓           |       |
+| `argument-hint`            | ✓           |       |
+| `disable-model-invocation` | ✓           |       |
+| `user-invocable`           | ✓           |       |
+| `metadata`                 |             | ✓     |
+
+The editor is the file itself rather than a form over those keys, on purpose:
+a form can only represent what it knows about, and would quietly drop
+anything it didn't on save — including keys belonging to an agent this app
+hasn't been taught about yet.
+
+## Adding an agent
+
+Nothing outside `apps/backend/skills/` knows which agents exist. Write an
+adapter against `SkillProvider`:
+
+```ts
+// skills/cursor.ts
+import type { SkillProvider } from "./types"
+
+export const cursor: SkillProvider = {
+  id: "cursor",
+  label: "Cursor",
+  short: "CU",
+  readsSharedRoot: false,
+  probe: async () => ({ available: Boolean(Bun.which("cursor")) }),
+  ownRoot: (scope, cwd) => join(scope === "project" ? cwd! : homedir(), ".cursor", "skills"),
+  list: async cwd => ({ sightings: [], problems: [] }),
+  project: async (dir, scope, cwd) => {},
+  unproject: async (dir, scope, cwd) => {}
+}
+```
+
+Register it in [skills/index.ts](apps/backend/skills/index.ts) and it appears
+in the sidebar, as a badge beside every skill, as a filter above the list,
+as a "Cursor only" choice when writing one, and in the frontmatter table. A
+provider says where its agent looks, where that agent keeps its own, and how
+to link a shared directory into place; it deliberately doesn't parse
+`SKILL.md`, because two agents routinely find the same file and parsing once
+after deduplication is what keeps the list one row per skill.
+
+The two built in take different routes to the same answer, which is the point
+of the seam:
+
+- [claude-code.ts](apps/backend/skills/claude-code.ts) walks the filesystem.
+  The Agent SDK's `supportedCommands()` will list what a session can see, but
+  reports no path, and a pane that can't say where a skill lives can't open
+  it. Its roots are stable and few, so nothing here spawns the agent —
+  listing costs nothing.
+- [codex.ts](apps/backend/skills/codex.ts) asks `codex app-server` over
+  JSON-RPC. Codex looks in more places than are worth guessing at and which
+  are live depends on config this app doesn't read, so `skills/list` answers
+  with the path, the scope and the owning plugin for each.
+
+## Scope and origin
+
+Two separate axes, kept separate on purpose. **Scope** is how far a skill
+travels: `project` or `user`. **Origin** is who put it there, and it's what
+the list groups by — "why did the agent do that" is a different conversation
+for each, and only the first two are anybody's to change:
+
+- **This project** — yours, in the repo.
+- **Personal** — yours, in your home directory.
+- **From plugins** — provided by an installed plugin, replaced when it updates.
+- **Synced from your account** — re-downloaded on a timer, so an edit has a
+  short life.
+- **The agent's own** — shipped with the agent itself.
+
+The last three are shown and never written. The editor says which, and what
+would happen to an edit, rather than a bare "read-only" that reads as this
+app being unable to.
+
+Collapsing these into one axis is the mistake this replaced: a plugin's
+skills install under your home directory and so do your own, so a list keyed
+on location alone can't tell the agent's defaults from the ones you wrote.
 
 ## Configuration
 
 Backend `.env`, loaded by Bun (no dotenv):
 
-| Variable                | Default       | Meaning                                              |
-| ----------------------- | ------------- | ---------------------------------------------------- |
-| `DB_URL`                | — (required)  | MongoDB connection string                            |
-| `PORT`                  | `8080`        | Websocket port                                       |
-| `AGENT`                 | `claude-code` | Default provider when a session omits one            |
-| `AGENT_IDLE_TIMEOUT_MS` | `120000`      | Longest silence from an agent before the turn is cut |
-| `DB_TIMEOUT_MS`         | `5000`        | How long to wait for Mongo before calling it down    |
+| Variable            | Default      | Meaning                                       |
+| ------------------- | ------------ | --------------------------------------------- |
+| `DB_URL`            | — (required) | MongoDB connection string                     |
+| `PORT`              | `8080`       | Websocket port                                |
+| `CODEX_COMMAND`     | `codex`      | The Codex CLI to run `app-server` with        |
+| `CODEX_TIMEOUT_MS`  | `30000`      | How long to wait for it to answer             |
+| `DB_TIMEOUT_MS`     | `5000`       | How long to wait for Mongo before calling it down |
+| `DEBUG`             | unset        | Log what the agents' own processes print      |
 
-Two constants live in [config.ts](apps/backend/config.ts) rather than the
-environment: `allowedTools`, currently `Read`, `Edit`, `Glob` — widen it if you
-want the agent to run commands — and the frontend's server URL, in
-[src/config.ts](apps/frontend/src/config.ts).
+The frontend's server URL is in [src/config.ts](apps/frontend/src/config.ts).
 
 ## Layout
 
 ```
 apps/
-  backend/     websocket server; runs an agent in a workspace and streams the turn
-  frontend/    React chat UI — sidebar, transcript, composer
+  backend/     websocket server; lists, writes and links skills
+  frontend/    React pane — projects, skill list, SKILL.md editor
 
 packages/
-  commons/     the wire protocol: incoming/outgoing message types, zod schemas
-  db/          mongoose schemas (Workspace, Session, Message)
+  commons/     the wire protocol and the Skill model
+  db/          the Workspace schema — the folder list, and nothing else
   ui/          shared React primitives
   eslint-config/, typescript-config/
 ```
 
-Each app has its own README with a file-by-file map:
-[backend](apps/backend/README.md), [frontend](apps/frontend/README.md).
-
-## Adding an agent
-
-Nothing outside `apps/backend/agents/` knows which agent is running. Write an
-adapter that translates the agent's stream into `AgentEvent`s:
-
-```ts
-// agents/gemini.ts
-import type { AgentEvent, AgentProvider, AgentRunOptions } from "./types"
-
-export const gemini: AgentProvider = {
-  id: "gemini",
-  label: "Gemini",
-  async *run(options: AgentRunOptions): AsyncGenerator<AgentEvent> {
-    yield { type: "text-start", blockId: "0", text: "" }
-    yield { type: "text-delta", blockId: "0", text: "hello" }
-  }
-}
-```
-
-Register it in [agents/index.ts](apps/backend/agents/index.ts) and it shows up
-in the UI's agent picker. The events a provider may emit are `text-start`,
-`text-delta`, `tool-start`, `tool-end`, `session` (its own conversation id,
-stored so the next turn resumes the same thread), `notice` and `failed`. Block
-ids only need to be unique within a turn. An adapter is also expected to
-honour `options.signal` and to describe its own failures — see
-[When it goes wrong](#when-it-goes-wrong). See
-[claude-code.ts](apps/backend/agents/claude-code.ts) for a token-delta stream
-and [codex.ts](apps/backend/agents/codex.ts) for one that revises whole items
-in place.
-
 ## When it goes wrong
 
-An agent turn can fail in ways that are nothing alike, and "something went
-wrong" is the same unhelpful answer to all of them. So nothing here reports a
-failure as a string. Every failure is a `Failure` from
+Nothing here reports a failure as a string. Every failure is a `Failure` from
 [commons/errors.ts](packages/commons/errors.ts): a `kind` the UI branches on,
-one sentence for the person, the provider's own words kept aside as `detail`,
-whether sending the same thing again stands a chance, and — for a limit — the
-moment it lifts.
+one sentence for the person, and the underlying wording kept aside as
+`detail`. What that buys, case by case:
 
-What that buys, case by case:
-
-- **The plan's allowance runs out.** The Claude adapter reads the SDK's own
-  rate-limit accounting, which is the only thing that tells a spent weekly
-  allowance from a burst being throttled: the API reports both as a 429. The
-  banner shows the reset time, counts down to it, and the composer comes back
-  on by itself when it passes. An allowance getting close arrives first as a
-  `notice`, while the turn is still running.
-- **The agent stops responding.** A stalled stream doesn't close, it just goes
-  quiet, and a `for await` over it waits forever.
-  [watchdog.ts](apps/backend/services/watchdog.ts) bounds the silence between
-  two events — not the length of the turn, so a long job that keeps emitting
-  is never cut off — and aborts the agent when it's exceeded.
-- **The connection drops.** Client-side, the live turn is closed with what had
-  arrived so far, because only `turn-ended` would otherwise ever close it.
-  Server-side, the disconnect aborts the agent rather than leaving it working
-  on a reply with nowhere to go.
-- **The database is down.** The websocket port opens before Mongo is reached,
-  so the UI can connect and be told what's wrong instead of sitting in a
-  reconnect loop against a port that never opened. The folder picker still
-  works; everything else fails immediately rather than on a 30-second driver
-  timeout.
-- **The agent isn't signed in, or isn't installed.** Reported as `auth` and
-  `agent-unavailable`, which are not offered a retry button — nothing about
-  sending the same message again signs anybody in.
-
-A turn always ends with exactly one `turn-ended`, whatever happens in between,
-and whatever the agent managed to write before failing is saved.
+- **A `SKILL.md` won't parse.** A skill with broken frontmatter doesn't
+  announce itself — the agent simply never offers it, which looks exactly
+  like never having written it. Those files are counted at the foot of the
+  list with the path and the parser's complaint, rather than dropped.
+- **A skill loses its name or description.** Refused on save. An agent
+  decides whether a skill applies from those two fields alone, so a skill
+  missing either will never be chosen, and saving it silently looks
+  identical to saving one that works.
+- **An agent isn't installed.** Reported per provider in the sidebar and in
+  every badge. "You have no skills" and "one of the two places they live
+  can't be read" are different sentences.
+- **`codex app-server` won't start.** That provider's skills are missing from
+  the list and the reason is at the foot of it; the other agent's are still
+  shown. One agent being unreachable doesn't fail the request.
+- **Something is already where a link should go.** Refused. A directory at a
+  skill path is somebody's actual skill, and replacing it with a pointer
+  elsewhere would delete their work to make a listing tidier. Deleting is the
+  mirror image: a link is only removed once it's been checked that it points
+  at the skill being deleted.
+- **The database is down.** The port opens before Mongo is reached, so the UI
+  connects and is told what's wrong. Personal skills keep listing the whole
+  time — they're files, and the database only holds the folder list.
 
 ## Run it on localhost only
 
-Two things make this a local-only tool as it stands:
-
-- **The websocket server has no authentication.** Anyone who can reach the port
-  can browse the filesystem through the folder picker, register any absolute
-  path as a workspace, and run an agent in it.
-- **The Claude Code adapter uses `permissionMode: "bypassPermissions"`** — tool
-  calls are not prompted for. The `allowedTools` list is the only bound;
-  Codex relies on its own sandbox instead.
-
-Don't expose the backend port to a network you don't trust.
+The websocket server has no authentication, and it reads and writes
+`SKILL.md` files under your home directory and your projects. Anyone who can
+reach the port can browse the filesystem through the folder picker, register
+any absolute path as a project, and write a skill your agents will then
+read — which is as good as writing their instructions. Don't expose the
+backend port to a network you don't trust.
 
 ## Scripts
 
 ```bash
-bun dev           # turbo run dev — all apps, watch mode
-bun run build     # turbo run build
-bun run lint
+bun dev           # turbo run dev — both apps, watch mode
+bun run build
 bun run check-types
-bun run format    # prettier over **/*.{ts,tsx,md}
+bun run lint
 ```

@@ -30,7 +30,7 @@ export function AddWorkspaceForm({
 
   return (
     <div className="border-b border-rule p-3">
-      <div className="mb-2 font-mono text-[12px] text-dim">Workspaces</div>
+      <div className="mb-2 font-mono text-[12px] text-dim">Projects</div>
       <button
         className="w-full rounded-sm bg-raised px-2.5 py-1.5 font-mono text-[12px] text-ink hover:bg-rule"
         onClick={open}

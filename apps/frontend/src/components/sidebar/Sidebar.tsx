@@ -1,52 +1,47 @@
-import { useState } from "react"
-import type { AgentSummary, DirectoryListing } from "commons/types"
+import type { DirectoryListing, ProviderSummary, Workspace } from "commons/types"
 import type { ConnectionStatus as Status } from "../../hooks/useSocket"
-import type { UIWorkspace } from "../../lib/transcript"
 import { AddWorkspaceForm } from "./AddWorkspaceForm"
 import { ConnectionStatus } from "./ConnectionStatus"
-import { WorkspaceItem } from "./WorkspaceItem"
+import { ProviderList } from "./ProviderList"
 
+/**
+ * What's in view: a project, or nothing but the skills that follow the
+ * person around.
+ *
+ * "Personal" is a row rather than a mode because it is the same question as
+ * a project — which folder are we reading skills out of — and putting it in
+ * the same list is what makes a personal skill and a project skill feel like
+ * the same kind of thing, which they are.
+ */
 export function Sidebar({
   workspaces,
-  activeSessionId,
+  workspaceId,
+  providers,
   status,
   attempts,
   retryAt,
   everConnected,
-  onReconnect,
-  agents,
   directory,
   directoryLoading,
+  onSelectWorkspace,
   onBrowseDirectory,
   onAddWorkspace,
-  onSelectSession,
-  onNewSession,
-  onRenameSession,
-  onDeleteSession
+  onReconnect
 }: {
-  workspaces: UIWorkspace[]
-  activeSessionId: string | null
+  workspaces: Workspace[]
+  workspaceId: string | null
+  providers: ProviderSummary[]
   status: Status
   attempts: number
   retryAt: number | null
   everConnected: boolean
-  onReconnect: () => void
-  agents: AgentSummary[]
   directory: DirectoryListing | null
   directoryLoading: boolean
+  onSelectWorkspace: (id: string | null) => void
   onBrowseDirectory: (path?: string) => void
   onAddWorkspace: (path: string) => void
-  onSelectSession: (id: string) => void
-  onNewSession: (workspaceId: string, agentId: string) => void
-  onRenameSession: (id: string, name: string) => void
-  onDeleteSession: (id: string) => void
+  onReconnect: () => void
 }) {
-  const [expanded, setExpanded] = useState<string[]>([])
-
-  function toggle(id: string) {
-    setExpanded(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]))
-  }
-
   return (
     <div className="flex h-full flex-col bg-panel">
       <AddWorkspaceForm
@@ -57,27 +52,26 @@ export function Sidebar({
       />
 
       <div className="flex-1 overflow-y-auto p-1.5">
-        {workspaces.length === 0 ? (
-          <p className="px-2 py-3 text-[13px] leading-relaxed text-dim">
-            Choose a folder above to give the agent somewhere to work.
-          </p>
-        ) : (
-          workspaces.map((w, i) => (
-            <WorkspaceItem
-              key={w.id ?? `pending-${i}`}
-              workspace={w}
-              open={w.id !== null && expanded.includes(w.id)}
-              activeSessionId={activeSessionId}
-              agents={agents}
-              onToggle={() => w.id && toggle(w.id)}
-              onSelectSession={onSelectSession}
-              onNewSession={onNewSession}
-              onRenameSession={onRenameSession}
-              onDeleteSession={onDeleteSession}
-            />
-          ))
-        )}
+        <Row
+          name="Personal"
+          detail="Skills you carry everywhere"
+          active={workspaceId === null}
+          onSelect={() => onSelectWorkspace(null)}
+        />
+
+        {workspaces.map((workspace, i) => (
+          <Row
+            key={workspace.id || `pending-${i}`}
+            name={workspace.name}
+            detail={workspace.path}
+            path
+            active={workspace.id === workspaceId}
+            onSelect={() => workspace.id && onSelectWorkspace(workspace.id)}
+          />
+        ))}
       </div>
+
+      <ProviderList providers={providers} />
 
       <ConnectionStatus
         status={status}
@@ -87,5 +81,38 @@ export function Sidebar({
         onReconnect={onReconnect}
       />
     </div>
+  )
+}
+
+function Row({
+  name,
+  detail,
+  path,
+  active,
+  onSelect
+}: {
+  name: string
+  detail: string
+  /** Truncate from the left, so the end of a folder path stays legible. */
+  path?: boolean
+  active: boolean
+  onSelect: () => void
+}) {
+  return (
+    <button
+      onClick={onSelect}
+      className={`block w-full rounded px-2 py-1.5 text-left transition-colors ${
+        active ? "bg-raised" : "hover:bg-raised/60"
+      }`}
+    >
+      <span className="block truncate font-mono text-[13px] text-ink">{name}</span>
+      <span
+        className={`mt-0.5 block font-mono text-[11px] text-dim ${
+          path ? "truncate-path" : "truncate"
+        }`}
+      >
+        {detail}
+      </span>
+    </button>
   )
 }

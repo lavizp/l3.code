@@ -15,5 +15,8 @@
   "dependencies": {
     "@types/mongoose": "^5.11.97",
     "mongoose": "^9.10.1"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit"
   }
 }

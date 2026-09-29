@@ -1,7 +1,8 @@
 # frontend
 
-The chat UI: a websocket client that streams an agent turn into a transcript.
-It talks to `apps/backend` over the message types in `packages/commons`.
+The skill pane: a websocket client that lists every `SKILL.md` the agents on
+this machine can see, and edits the ones this app owns. It talks to
+`apps/backend` over the message types in `packages/commons`.
 
 ```bash
 bun install
@@ -16,55 +17,38 @@ The server URL lives in `src/config.ts`.
 
 ```
 src/
-  frontend.tsx           React entry point, loaded by index.html
-  index.ts               dev/prod server that serves index.html
-  App.tsx                layout only — state comes from useAgentClient
-  config.ts
+  frontend.tsx                 React entry point, loaded by index.html
+  index.ts                     dev/prod server that serves index.html
+  App.tsx                      three columns: folder, skill list, editor
 
   hooks/
-    useSocket.ts         one reconnecting socket, with its backoff on show
-    useAgentClient.ts    workspaces, the open session, and the actions
-    useCountdown.ts      ticks down to a limit's reset so the UI re-enables
-
-  lib/failure.ts         a Failure's title, tone and countdown formatting
-
-  lib/transcript/        the server event -> UI state fold
-    types.ts             UIWorkspace / UISession / UIMessage
-    ids.ts               live and optimistic-local message ids
-    normalize.ts         persisted messages -> renderable ones
-    update.ts            immutable helpers, plus endLiveTurns for a dropped socket
-    apply-event.ts       applyEvent: one server event -> next state
-    selectors.ts         session title, is-running, lookups
-
-  lib/markdown/          streaming-tolerant markdown renderer
-    parse.ts             source -> blocks
-    inline.tsx           code spans, emphasis, links
-    Markdown.tsx         blocks -> React
+    useSkillPane.ts            all client state; folds server events into it
+    useSocket.ts               one socket, reconnecting with reported backoff
+    useCountdown.ts            a ticking remainder, for the reconnect wait
 
   components/
-    sidebar/             workspace tree, add-workspace form, connection dot
-    transcript/          the turn list, user/assistant turns, tool rows
-    Composer.tsx         the message box
-    ErrorBanner.tsx      what went wrong, and the button that does something
-    ui/                  shadcn primitives
+    ErrorBanner.tsx            the one place a failure is explained
+    sidebar/
+      Sidebar.tsx              Personal, then one row per project
+      AddWorkspaceForm.tsx     opens the folder picker
+      FolderPicker.tsx         walks the backend's filesystem
+      ProviderList.tsx         which agents this server can ask
+      ConnectionStatus.tsx     whether the server is there
+    skills/
+      SkillList.tsx            grouped by scope, filtered
+      ProviderMarks.tsx        one initial per agent that can see a skill
+      SkillEditor.tsx          the SKILL.md, plus who honours each key
+      NewSkillForm.tsx         scope first, because scope decides who reads it
+      SkillProblems.tsx        the files that wouldn't parse
+
+  lib/
+    failure.ts                 a Failure as a heading and a colour
+    markdown/                  a small renderer
 ```
 
-State lives in one place: `applyEvent` folds every server event into the
-workspace tree, and `useAgentClient` owns that tree. Components take props and
-render.
+## Settling rather than patching
 
-## When things go wrong
-
-A failure arrives as a `Failure` from `commons` — a `kind`, a sentence, the
-provider's own words, and sometimes a `retryAt`. It is shown twice, on
-purpose: `TurnFailure` puts it in the transcript beside the reply it cut
-short, where it stays as a record, and `ErrorBanner` puts it at the top with
-whatever action it affords — send again, reconnect, or a countdown to a limit
-lifting.
-
-Two invariants are worth knowing before changing any of this. A live
-assistant turn is closed only by `turn-ended`, so `endLiveTurns` closes them
-when the socket drops instead — otherwise the caret blinks forever and the
-session's one live id is never freed for the next turn. And a usage limit
-with a known reset disables the composer until `useCountdown` reaches zero,
-which is what puts it back without a reload.
+Every write re-lists instead of patching state locally. A save isn't finished
+when the file is written — it's finished when the agents can see it, and that
+answer comes from walking their directories again. Guessing at it here would
+show a skill as reaching Codex before anything had checked that it does.

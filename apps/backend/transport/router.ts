@@ -1,37 +1,29 @@
 import {
-  AddMessageSchema,
-  CreateSessionSchema,
+  CreateSkillSchema,
   CreateWorkspaceSchema,
-  DeleteSessionSchema,
+  DeleteSkillSchema,
   ListDirectorySchema,
+  ListSkillsSchema,
+  ReadSkillSchema,
+  UpdateSkillSchema,
   failure,
+  type IncommingMessageType,
+  type SkillSource
 } from "commons/types"
 import { fail, FailureError, toFailure } from "../errors"
 import { databaseDown, databaseFailure, databaseReady } from "../repositories/failure"
-  import {RenameSessionSchema,
-  type IncommingMessageType
-} from "commons/types"
-import { getAgent } from "../agents"
-import {
-  createSession,
-  deleteSession,
-  renameSession
-} from "../repositories/sessions"
-import { createWorkspace } from "../repositories/workspaces"
+import { createWorkspace, findWorkspaceById } from "../repositories/workspaces"
 import { listDirectory } from "../services/directory"
-import { runTurn } from "../services/turn-runner"
+import {
+  createSkill,
+  deleteSkill,
+  listSkills,
+  readSkill,
+  updateSkill
+} from "../services/skills"
 import type { Connection } from "./connection"
 
 type Handler = (connection: Connection, payload: unknown) => Promise<void>
-
-/**
- * Sessions with a turn already running, so a second `add-message` for the
- * same session is refused rather than run alongside the first. Two agents in
- * one working directory interleave their edits and their transcripts, and
- * the second one resumes from a conversation the first hasn't finished
- * writing.
- */
-const running = new Set<string>()
 
 /**
  * Enough of a schema to validate with. Structural rather than `ZodType` so
@@ -62,6 +54,37 @@ function parse<T>(schema: Validator<T>, payload: unknown): T {
 }
 
 /**
+ * The folder behind a workspace id, or a refusal. Every skill operation that
+ * names a project goes through here, so an id the client invented can never
+ * become a path this server reads or writes.
+ */
+async function projectPath(id: string | undefined): Promise<string | undefined> {
+  if (!id) {
+    return undefined
+  }
+  const workspace = await findWorkspaceById(id).catch(cause => {
+    throw new FailureError(databaseFailure(cause, "project"))
+  })
+  if (!workspace) {
+    fail("not-found", "No such project.")
+  }
+  return workspace.path
+}
+
+/** Send the whole list back, which is what every write settles onto. */
+async function sendSkills(
+  connection: Connection,
+  workspaceId: string | undefined
+): Promise<void> {
+  const cwd = await projectPath(workspaceId)
+  const listing = await listSkills(cwd)
+  connection.send({
+    type: "skills-listed",
+    payload: { workspaceId: workspaceId ?? null, ...listing }
+  })
+}
+
+/**
  * One entry per incoming message type. Each handler validates its own payload
  * and answers on the same connection; anything it throws is classified and
  * reported back to the client by `routeMessage`.
@@ -70,7 +93,7 @@ const HANDLERS: Record<IncommingMessageType["type"], Handler> = {
   "create-workspace": async (connection, payload) => {
     const data = parse(CreateWorkspaceSchema, payload)
     const workspace = await createWorkspace(data.path).catch(cause => {
-      throw new FailureError(databaseFailure(cause, "workspace"))
+      throw new FailureError(databaseFailure(cause, "project"))
     })
     connection.send({ type: "workspace-created", payload: workspace })
   },
@@ -84,73 +107,56 @@ const HANDLERS: Record<IncommingMessageType["type"], Handler> = {
     })
   },
 
-  "create-session": async (connection, payload) => {
-    const data = parse(CreateSessionSchema, payload)
-    // Resolve the agent before writing anything, so an id the client made
-    // up fails the request instead of creating a session nothing can run.
-    // This is the only point at which a session's agent is decided.
-    const agent = agentOr400(data.agentId)
-    const session = await createSession(data.workspaceId, agent.id).catch(cause => {
-      throw new FailureError(databaseFailure(cause, "session"))
-    })
-    connection.send({
-      type: "session-created",
-      payload: {
-        id: session.id,
-        workspaceId: data.workspaceId,
-        agentId: agent.id
-      }
-    })
+  "list-skills": async (connection, payload) => {
+    const data = parse(ListSkillsSchema, payload ?? {})
+    await sendSkills(connection, data.workspaceId)
   },
 
-  "rename-session": async (connection, payload) => {
-    const { success, data } = RenameSessionSchema.safeParse(payload)
-    if (!success) {
-      throw new Error("Incorrect Schema")
-    }
-    const renamed = await renameSession(data.sessionId, data.name)
-    if (!renamed) {
-      throw new Error("Session Not found")
-    }
-    connection.send({
-      type: "session-renamed",
-      payload: { id: data.sessionId, name: renamed.name }
-    })
+  "read-skill": async (connection, payload) => {
+    const data = parse(ReadSkillSchema, payload)
+    connection.send({ type: "skill-read", payload: await readSkill(data.path) })
   },
 
-  "delete-session": async (connection, payload) => {
-    const { success, data } = DeleteSessionSchema.safeParse(payload)
-    if (!success) {
-      throw new Error("Incorrect Schema")
+  "create-skill": async (connection, payload) => {
+    const data = parse(CreateSkillSchema, payload)
+    if (data.scope === "project" && !data.workspaceId) {
+      fail("bad-request", "A project skill needs a project to live in.")
     }
-    // A session already gone is the outcome that was asked for, so tell the
-    // client it's gone either way rather than failing on the second try.
-    await deleteSession(data.sessionId)
-    connection.send({ type: "session-deleted", payload: { id: data.sessionId } })
+    const cwd = await projectPath(data.workspaceId)
+    const source = await createSkill({ ...data, cwd })
+    await sendSaved(connection, source, data.workspaceId, true)
   },
 
-  "add-message": async (connection, payload) => {
-    const data = parse(AddMessageSchema, payload)
+  "update-skill": async (connection, payload) => {
+    const data = parse(UpdateSkillSchema, payload)
+    const source = await updateSkill(data.path, data.raw)
+    await sendSaved(connection, source, data.workspaceId, false)
+  },
 
-    if (running.has(data.sessionId)) {
-      fail(
-        "bad-request",
-        "This session is already working on something. Wait for it to finish."
-      )
-    }
-
-    running.add(data.sessionId)
-    try {
-      await runTurn({
-        sessionId: data.sessionId,
-        message: data.message,
-        emit: event => connection.send(event),
-        signal: connection.signal
-      })
-    } finally {
-      running.delete(data.sessionId)
-    }
+  "delete-skill": async (connection, payload) => {
+    const data = parse(DeleteSkillSchema, payload)
+    await deleteSkill(data.path)
+    connection.send({ type: "skill-deleted", payload: { path: data.path } })
+    await sendSkills(connection, data.workspaceId)
   }
+}
+
+/**
+ * Answer a write with the saved file, then with the list as it now stands.
+ *
+ * Writing a skill and finding out who can read it are two different
+ * questions, and the second is the one that matters: a skill nobody can see
+ * is a file, not a skill. So a save is never reported on its own — the
+ * listing that follows is what proves the link landed.
+ */
+async function sendSaved(
+  connection: Connection,
+  source: SkillSource,
+  workspaceId: string | undefined,
+  created: boolean
+): Promise<void> {
+  connection.send({ type: "skill-saved", payload: { source, created } })
+  await sendSkills(connection, workspaceId)
 }
 
 /**
@@ -183,32 +189,24 @@ export async function routeMessage(
     } else {
       console.warn(`Refused "${msg.type}": ${error.message}`, error.detail ?? "")
     }
-    connection.fail(error, sessionIdOf(msg))
+    connection.fail(error)
   }
 }
 
 /**
- * Everything but the folder picker needs the database. Checking up front
- * turns a 30-second driver timeout into an immediate, honest answer.
+ * The database holds the list of projects and nothing else — the skills
+ * themselves are files. So the folder picker and every operation that names
+ * no project keep working while Mongo is down, and only the ones that have
+ * to turn an id into a path are refused.
  */
 function requireDatabaseFor(msg: IncommingMessageType): void {
-  if (msg.type !== "list-directory" && !databaseReady()) {
+  const needsProject =
+    msg.type === "create-workspace" ||
+    (msg.type !== "list-directory" &&
+      typeof (msg.payload as { workspaceId?: string } | undefined)?.workspaceId ===
+        "string")
+
+  if (needsProject && !databaseReady()) {
     throw new FailureError(databaseDown())
   }
-}
-
-/** The chosen agent, or a refusal naming what a client may actually pick. */
-function agentOr400(id: string | undefined) {
-  try {
-    return getAgent(id)
-  } catch (cause) {
-    return fail("bad-request", `No agent called "${id}" is registered on this server.`, {
-      detail: cause instanceof Error ? cause.message : undefined
-    })
-  }
-}
-
-/** So an error can be attached to the session it belongs to, when there is one. */
-function sessionIdOf(msg: IncommingMessageType): string | undefined {
-  return msg.type === "add-message" ? msg.payload?.sessionId : undefined
 }

@@ -1,84 +1,120 @@
-import { Composer } from "./components/Composer"
+import { useState } from "react"
 import { ErrorBanner } from "./components/ErrorBanner"
-import { NoSession } from "./components/NoSession"
-import { SessionHeader } from "./components/SessionHeader"
 import { Sidebar } from "./components/sidebar"
-import { Transcript } from "./components/transcript"
-import { useAgentClient } from "./hooks/useAgentClient"
-import { useCountdown } from "./hooks/useCountdown"
-import { formatWait } from "./lib/failure"
-import { isRunning } from "./lib/transcript"
+import { NewSkillForm, SkillEditor, SkillList, SkillProblems } from "./components/skills"
+import { useSkillPane } from "./hooks/useSkillPane"
 import "./index.css"
 
+/**
+ * Three columns: which folder, which skill, and the skill itself.
+ *
+ * The middle column is the product. Everything a coding agent knows how to
+ * do that somebody taught it lives in a `SKILL.md` somewhere on this
+ * machine, scattered across a directory per agent, and until they are in one
+ * list nobody can answer "what does my agent actually know" without going
+ * and looking.
+ */
 export function App() {
-  const agent = useAgentClient()
-  const { workspace, session } = agent
+  const pane = useSkillPane()
+  const [creating, setCreating] = useState(false)
 
-  // A limit the server told us the reset time for takes the composer out of
-  // service until then, and puts itself back in when the countdown runs out.
-  const limited = agent.error?.kind === "usage-limit" ? agent.error : undefined
-  const waiting = useCountdown(limited?.retryAt)
+  function create(input: Parameters<typeof pane.createSkill>[0]) {
+    setCreating(false)
+    pane.createSkill(input)
+  }
 
   return (
     <div className="flex h-screen bg-void text-ink">
       <aside className="w-64 shrink-0 border-r border-rule">
         <Sidebar
-          workspaces={agent.workspaces}
-          activeSessionId={agent.activeSessionId}
-          status={agent.status}
-          attempts={agent.attempts}
-          retryAt={agent.retryAt}
-          everConnected={agent.everConnected}
-          onReconnect={agent.reconnect}
-          agents={agent.agents}
-          directory={agent.directory}
-          directoryLoading={agent.directoryLoading}
-          onBrowseDirectory={agent.browseDirectory}
-          onAddWorkspace={agent.addWorkspace}
-          onSelectSession={agent.selectSession}
-          onNewSession={agent.newSession}
-          onRenameSession={agent.renameSession}
-          onDeleteSession={agent.deleteSession}
+          workspaces={pane.workspaces}
+          workspaceId={pane.workspaceId}
+          providers={pane.providers}
+          status={pane.status}
+          attempts={pane.attempts}
+          retryAt={pane.retryAt}
+          everConnected={pane.everConnected}
+          directory={pane.directory}
+          directoryLoading={pane.directoryLoading}
+          onSelectWorkspace={pane.selectWorkspace}
+          onBrowseDirectory={pane.browseDirectory}
+          onAddWorkspace={pane.addWorkspace}
+          onReconnect={pane.reconnect}
         />
       </aside>
 
+      <section className="flex w-80 shrink-0 flex-col border-r border-rule bg-panel">
+        <header className="flex items-center justify-between border-b border-rule px-3 py-2">
+          <h1 className="font-mono text-[12px] text-dim">
+            {pane.workspace?.name ?? "Personal"}
+            {pane.loading && <span className="ml-2 opacity-60">reading…</span>}
+          </h1>
+          <button
+            onClick={() => setCreating(true)}
+            className="font-mono text-[12px] text-signal hover:opacity-80"
+          >
+            + New
+          </button>
+        </header>
+
+        <div className="min-h-0 flex-1">
+          <SkillList
+            skills={pane.skills}
+            providers={pane.providers}
+            selectedPath={pane.source?.path ?? null}
+            onSelect={pane.selectSkill}
+            hasProject={pane.workspaceId !== null}
+          />
+        </div>
+
+        <SkillProblems problems={pane.problems} providers={pane.providers} />
+      </section>
+
       <main className="flex min-w-0 flex-1 flex-col">
-        {agent.error && (
+        {pane.error && (
           <ErrorBanner
-            error={agent.error}
-            canRetry={agent.canRetry}
-            connected={agent.connected}
-            onRetry={agent.retry}
-            onReconnect={agent.reconnect}
-            onDismiss={agent.dismissError}
+            error={pane.error}
+            connected={pane.connected}
+            onReconnect={pane.reconnect}
+            onDismiss={pane.dismissError}
           />
         )}
 
-        {session && workspace ? (
-          <>
-            <SessionHeader
-              name={workspace.name}
-              path={workspace.path}
-              agent={
-                agent.agents.find(a => a.id === session.agentId)?.label ?? session.agentId
-              }
-            />
-            <Transcript session={session} workspacePath={workspace.path} />
-            <Composer
-              onSend={agent.sendMessage}
-              busy={isRunning(session)}
-              disabled={!agent.connected}
-              blockedReason={
-                waiting !== null && waiting > 0
-                  ? `Plan limit reached — sending is back in ${formatWait(waiting)}.`
-                  : undefined
-              }
-            />
-          </>
+        {creating ? (
+          <NewSkillForm
+            destinations={pane.destinations}
+            providers={pane.providers}
+            busy={pane.saving}
+            onCreate={create}
+            onCancel={() => setCreating(false)}
+          />
+        ) : pane.source ? (
+          <SkillEditor
+            skill={pane.selected}
+            source={pane.source}
+            providers={pane.providers}
+            saving={pane.saving}
+            onSave={pane.saveSkill}
+            onDelete={() => pane.deleteSkill(pane.source!.path)}
+          />
         ) : (
-          <NoSession />
+          <Empty />
         )}
       </main>
+    </div>
+  )
+}
+
+function Empty() {
+  return (
+    <div className="flex flex-1 items-center justify-center px-8">
+      <p className="max-w-md text-center text-[13px] leading-relaxed text-dim">
+        Pick a skill to read what it tells your agents, or write a new one. A skill
+        written here goes into{" "}
+        <span className="font-mono text-ink/70">.agents/skills</span> once and is
+        linked into every agent's own folder, so there's a single file to edit
+        rather than a copy per agent.
+      </p>
     </div>
   )
 }

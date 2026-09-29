@@ -1,34 +1,16 @@
 import mongoose from "mongoose"
 
+/**
+ * A project this app knows about.
+ *
+ * Skills themselves are never stored here — they are files on disk, and the
+ * agents read them from there, so a copy in a database would only ever be a
+ * stale second opinion. What is worth keeping is the list of folders to go
+ * and look in, which is nothing the filesystem can tell us on its own.
+ */
 export const Workspace = new mongoose.Schema({
   path: String,
   name: String
 })
 
-export const Message = new mongoose.Schema({
-  role: {
-    type: String,
-    enum: ['user', 'assistant']
-  },
-  payload: Object
-}, { timestamps: true })
-
-export const Session = new mongoose.Schema({
-  conversation: [Message],
-  /** What the person called this session. Absent means "no name given yet". */
-  name: String,
-  workspace: { type: mongoose.Schema.Types.ObjectId, ref: 'Workspace' },
-  /** Claude's conversation id, from before sessions could pick an agent. */
-  anthropicSessionId: String,
-  /** Id of the agent provider that runs this session's turns, for its life. */
-  agent: String,
-  /**
-   * Agent id -> that agent's own conversation id. Keyed by agent because a
-   * resume id only means anything to the provider that issued it; a session
-   * is pinned to one agent, so in practice there is a single entry.
-   */
-  agentSessions: { type: Map, of: String }
-})
-
-export const SessionModel = mongoose.model("Session", Session)
 export const WorkspaceModel = mongoose.model("Workspace", Workspace)

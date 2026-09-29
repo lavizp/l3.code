@@ -1,10 +1,10 @@
 import { failure, type IncommingMessageType } from "commons/types"
 import { WebSocketServer } from "ws"
 import { uuid } from "uuidv4"
-import { listAgents } from "../agents"
 import { toFailure } from "../errors"
 import { databaseDown, databaseReady } from "../repositories/failure"
 import { loadWorkspaces } from "../repositories/workspaces"
+import { describeProviders } from "../services/skills"
 import { Connection } from "./connection"
 import { routeMessage } from "./router"
 
@@ -50,7 +50,6 @@ export function startServer(port: number): WebSocketServer {
 
     socket.on("close", () => {
       connections.delete(connection)
-      // Stops any turn still streaming to this client.
       connection.close()
     })
 
@@ -62,24 +61,23 @@ export function startServer(port: number): WebSocketServer {
 
 /** Everything the client needs to draw the app on connect. */
 async function sendInitialState(connection: Connection): Promise<void> {
-  // The agent list needs nothing but the registry, so send it even when the
-  // database is missing: a UI that knows what agents exist and says why it
-  // can't list workspaces beats one that can't draw itself at all.
+  // Which agents are installed is a question about this machine, not about
+  // the database — and the skills that follow a person around can be listed
+  // without either. So a UI with no database still draws, and still shows
+  // the personal skills; only the project list is missing.
+  const providers = await describeProviders()
+
   if (!databaseReady()) {
-    connection.send({ type: "init", workspaces: [], agents: listAgents() })
+    connection.send({ type: "init", workspaces: [], providers })
     connection.fail(databaseDown())
     return
   }
 
   try {
-    connection.send({
-      type: "init",
-      workspaces: await loadWorkspaces(),
-      agents: listAgents()
-    })
+    connection.send({ type: "init", workspaces: await loadWorkspaces(), providers })
   } catch (cause) {
-    console.error("Failed to load workspaces:", cause)
-    connection.send({ type: "init", workspaces: [], agents: listAgents() })
+    console.error("Failed to load projects:", cause)
+    connection.send({ type: "init", workspaces: [], providers })
     connection.fail(toFailure(cause))
   }
 }

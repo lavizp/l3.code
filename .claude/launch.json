@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "l3.code",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["dev"],
+      "port": 3000
+    }
+  ]
+}

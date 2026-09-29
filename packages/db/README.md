@@ -1,15 +1,8 @@
 # db
 
-To install dependencies:
+One mongoose schema: `Workspace`, the list of folders to go and look in.
 
-```bash
-bun install
-```
-
-To run:
-
-```bash
-bun run index.ts
-```
-
-This project was created using `bun init` in bun v1.4.0. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+Skills are never stored here. They are files on disk and the agents read them
+from there, so a copy in a database would only ever be a stale second
+opinion. What is worth keeping is the folder list, which is the one thing the
+filesystem can't tell us on its own.

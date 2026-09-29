@@ -1,98 +1,75 @@
 # backend
 
-Websocket server that runs a coding agent inside a workspace folder and
-streams the turn back to the client.
+A websocket server that lists, writes and links `SKILL.md` files. It speaks
+the message types in `packages/commons` and holds the folder list in MongoDB.
 
 ```bash
-bun install
-bun dev        # bun --watch index.ts
+bun dev     # bun --watch index.ts
+bun start
 ```
-
-Configuration (`.env`, loaded by Bun):
-
-| Variable                 | Default       | Meaning                                              |
-| ------------------------ | ------------- | ---------------------------------------------------- |
-| `DB_URL`                 | — (required)  | MongoDB connection string                            |
-| `PORT`                   | `8080`        | Websocket port                                       |
-| `AGENT`                  | `claude-code` | Which registered agent provider to run               |
-| `AGENT_IDLE_TIMEOUT_MS`  | `120000`      | Longest silence from an agent before the turn is cut |
-| `DB_TIMEOUT_MS`          | `5000`        | How long to wait for Mongo before calling it down    |
 
 ## Layout
 
 ```
-index.ts          bootstrap: start the server, then keep reaching for Mongo
-config.ts         environment + constants, read once
-errors.ts         FailureError and toFailure: a throw that knows how it reads
+index.ts                   opens the port, then connects to Mongo
+config.ts                  every env-dependent knob, read once
 
-agents/           the agent seam — see below
-  types.ts        AgentProvider, AgentRunOptions, AgentEvent
-  registry.ts     register / look up providers by id
-  claude-code.ts  Claude Code adapter (the only file that knows the SDK)
-  codex.ts        Codex adapter
-  failures.ts     provider trouble -> a Failure the UI can branch on
-  index.ts        registers the built-in providers
+transport/
+  server.ts                accepts clients, sends the initial state
+  connection.ts            one client, and the only thing that writes to it
+  router.ts                one handler per incoming message type
 
-transport/        websocket plumbing
-  connection.ts   one client; the only thing that writes to a socket
-  router.ts       incoming message type -> handler; answers its own failures
-  server.ts       accept sockets, send initial state
+skills/
+  types.ts                 the SkillProvider seam
+  registry.ts              register / look up providers
+  index.ts                 registers the built-ins
+  scan.ts                  find the SKILL.md directories under a root
+  claude-code.ts           filesystem walk of Claude Code's roots
+  codex.ts                 codex app-server's own skills/list
 
 services/
-  turn-runner.ts  persist, emit, stream one turn; always ends it
-  turn-blocks.ts  assembles the turn's blocks as events arrive
-  watchdog.ts     fails a turn whose agent has gone quiet
-  directory.ts    filesystem walking for the folder picker
+  skills.ts                merge the providers' answers; create/read/write/delete
+  frontmatter.ts           split and rejoin a SKILL.md
+  links.ts                 symlinks, created and removed carefully
+  codex-app-server.ts      a long-lived JSON-RPC child process
+  directory.ts             filesystem walking for the folder picker
 
-repositories/     all Mongo access
-  workspaces.ts
-  sessions.ts
-  failure.ts      a bad id vs. a database that isn't there
+repositories/
+  workspaces.ts            the project list
+  failure.ts               database trouble, told apart from a bad request
+
+errors.ts                  FailureError, and whatever was thrown as a Failure
 ```
 
-## Adding an agent
+## The seam
 
-Nothing outside `agents/` knows which agent is running. To add one — Codex,
-Gemini, a local model — write an adapter and register it:
+`SkillProvider` does two things: say where its agent looks for skills, and
+make a directory in the shared store appear in one of those places. It does
+*not* parse `SKILL.md` — two agents routinely find the same file by different
+routes, and parsing once, centrally, after the paths have been resolved and
+grouped is the only way the list ends up with one row per skill instead of
+one per sighting.
 
-```ts
-// agents/codex.ts
-import type { AgentEvent, AgentProvider, AgentRunOptions } from "./types"
+Adding an agent is a new file plus one `registerProvider` call. Nothing
+upstream of `skills/` changes.
 
-export const codex: AgentProvider = {
-  id: "codex",
-  async *run(options: AgentRunOptions): AsyncGenerator<AgentEvent> {
-    // translate that agent's stream into AgentEvents
-    yield { type: "text-start", blockId: "0", text: "" }
-    yield { type: "text-delta", blockId: "0", text: "hello" }
-  }
-}
-```
+## Writing
 
-```ts
-// agents/index.ts
-registerAgent(codex)
-```
+A new skill is written once, to `.agents/skills`, then handed to every
+provider to link into place. `.agents/skills` is the one directory more than
+one agent reads by itself, so it is the one written to; the providers that
+don't read it get a relative symlink.
 
-Then run it with `AGENT=codex`. The events a provider may emit are
-`text-start`, `text-delta`, `tool-start`, `tool-end`, `session` (its own
-conversation id, stored so the next turn can resume), `notice` (something
-mid-turn worth saying that isn't fatal) and `failed`. Block ids only have to
-be unique within a turn.
+Two rules in [links.ts](services/links.ts) bound what this does to somebody's
+`~/.claude` and `~/.codex`: it creates only links, and removes only links it
+has checked point at the skill being deleted. A directory sitting where a
+link should go is somebody's actual skill.
 
-An adapter is also where trouble gets a name. `failed` carries a `Failure`,
-not a string: a `kind` the UI branches on, a sentence for the person, the
-provider's own words as `detail`, and — for a limit — `retryAt`. Map the
-provider's own error codes where it has them and fall back to
-`classifyText` where it only offers a sentence; `agents/failures.ts` has both
-and the phrasing for every kind.
+## The path guard
 
-```ts
-import { agentFailure, classifyText } from "./failures"
-
-yield { type: "failed", error: agentFailure(classifyText(message), "Gemini", { detail: message }) }
-```
-
-Providers must also honour `options.signal`, which is aborted when the client
-disconnects or the turn stalls. An adapter that ignores it leaves the agent
-working — and billing — for a reply nobody will read.
+`assertSkillPath` in [services/skills.ts](services/skills.ts) is the boundary
+where a path off the wire becomes a file this server writes to. It has to be
+a `SKILL.md`, and it has to sit under somewhere deliberately in scope — a
+registered project, or the home directory's own agent folders. During a
+database outage the project list is unavailable, and a path that matches
+neither is reported as the outage rather than as an unknown path.

@@ -1,42 +1,29 @@
 import { useState } from "react"
 import type { Failure } from "commons/types"
-import { useCountdown } from "../hooks/useCountdown"
-import { formatClock, formatWait, present, TONE_CLASS } from "../lib/failure"
+import { present, TONE_CLASS } from "../lib/failure"
 
 /**
  * The one place a failure is explained and acted on.
  *
- * Three things beyond the sentence itself, because a sentence on its own
- * leaves a person with nothing to do: how long until it fixes itself, the
- * provider's own wording for when ours isn't specific enough, and the button
- * that gets back to where they were.
+ * Two things beyond the sentence itself, because a sentence on its own
+ * leaves a person with nothing to do: the server's own wording for when
+ * ours isn't specific enough, and the button that gets back to where they
+ * were.
  */
 export function ErrorBanner({
   error,
-  canRetry,
   connected,
-  onRetry,
   onReconnect,
   onDismiss
 }: {
   error: Failure
-  /** There is a message worth sending again. */
-  canRetry: boolean
   connected: boolean
-  onRetry: () => void
   onReconnect: () => void
   onDismiss: () => void
 }) {
   const [showDetail, setShowDetail] = useState(false)
   const { title, tone } = present(error)
   const colour = TONE_CLASS[tone]
-
-  const remaining = useCountdown(error.retryAt)
-  const waiting = remaining !== null && remaining > 0
-
-  // A limit that hasn't lifted yet can't be retried into submission, and a
-  // socket that's down can't carry the message anywhere.
-  const retryable = error.retryable && canRetry && !waiting && connected
 
   return (
     <div className={`border-b px-6 py-2.5 ${colour.border} ${colour.bg}`}>
@@ -46,13 +33,6 @@ export function ErrorBanner({
             <span className="font-medium">{title}</span>
             <span className="opacity-80"> — {error.message}</span>
           </p>
-
-          {waiting && (
-            <p className={`mt-0.5 font-mono text-[11px] opacity-70 ${colour.text}`}>
-              Sending is back in {formatWait(remaining)}
-              {error.retryAt && ` (at ${formatClock(error.retryAt)})`}.
-            </p>
-          )}
 
           {showDetail && error.detail && (
             <pre
@@ -72,11 +52,6 @@ export function ErrorBanner({
           {!connected && (
             <BannerAction tone={colour.text} onClick={onReconnect}>
               Reconnect
-            </BannerAction>
-          )}
-          {retryable && (
-            <BannerAction tone={colour.text} onClick={onRetry}>
-              Send again
             </BannerAction>
           )}
           <BannerAction tone={colour.text} onClick={onDismiss}>

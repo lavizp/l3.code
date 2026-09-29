@@ -21,29 +21,27 @@ export const config = {
   dbUrl: required("DB_URL"),
   port: Number(process.env.PORT ?? 8080),
 
-  /** Which registered agent provider runs a turn when nothing else says. */
-  defaultAgentId: process.env.AGENT ?? "claude-code",
+  /**
+   * The Codex CLI to run `app-server` with. Overridable because Codex is
+   * often installed through a version manager, and the shell that starts
+   * this server may not be the one that put it on PATH.
+   */
+  codexCommand: process.env.CODEX_COMMAND ?? "codex",
 
   /**
-   * How long an agent may go without saying anything before the turn is
-   * given up on. An agent may work for as long as it likes — tool calls and
-   * tokens both count as saying something — but a stream that has gone
-   * entirely quiet is indistinguishable from one that will never speak
-   * again, and waiting on it forever leaves the UI spinning with no way out.
+   * How long to wait for `codex app-server` to answer. Its first reply
+   * includes starting the process and scanning the skill roots, which is
+   * slow the once and instant afterwards.
    */
-  agentIdleTimeoutMs: duration("AGENT_IDLE_TIMEOUT_MS", 120_000),
+  codexTimeoutMs: duration("CODEX_TIMEOUT_MS", 30_000),
+
+  /** Whether to log what the agents' own processes print. */
+  debug: process.env.DEBUG === "1" || process.env.DEBUG === "true",
 
   /**
    * How long to wait for the database before deciding it isn't there. The
    * driver's own default is 30s, which is long enough that a request looks
    * hung rather than failed.
    */
-  dbTimeoutMs: duration("DB_TIMEOUT_MS", 5_000),
-
-  /**
-   * Tools an agent may use, for providers that take a per-tool allowlist.
-   * Codex has no such list — its sandbox is what bounds it — so this only
-   * reaches Claude Code.
-   */
-  allowedTools: ["Read", "Edit", "Glob"] as const
+  dbTimeoutMs: duration("DB_TIMEOUT_MS", 5_000)
 }

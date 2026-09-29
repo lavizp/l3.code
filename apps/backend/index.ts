@@ -1,6 +1,6 @@
 import mongoose from "mongoose"
-// Registers the built-in agent providers. Must run before any turn does.
-import "./agents"
+// Registers the built-in skill providers. Must run before anything is listed.
+import "./skills"
 import { config } from "./config"
 import { startServer } from "./transport/server"
 
@@ -12,6 +12,8 @@ import { startServer } from "./transport/server"
  * no server at all, so the UI sits in its reconnect loop saying
  * "disconnected" forever. Opening the port first lets it connect, hear
  * exactly what's wrong, and pick the work back up when the database arrives.
+ * It matters more here than it looks: the database holds the list of
+ * projects, so a person's own skills are listable the whole time it's down.
  */
 startServer(config.port)
 console.log(`started on :${config.port}`)

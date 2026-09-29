@@ -4,9 +4,9 @@ import type WebSocket from "ws"
 /** One connected client, and the only way anything writes to its socket. */
 export class Connection {
   /**
-   * Aborted when the client goes away. Long-running work started for this
-   * connection watches it, so a browser tab that is closed mid-turn stops the
-   * agent instead of leaving it working on a reply with nowhere to go.
+   * Aborted when the client goes away, so work started on its behalf — a
+   * filesystem walk across several agents' skill roots — stops rather than
+   * finishing into a socket nobody is reading.
    */
   private readonly gone = new AbortController()
 
@@ -36,9 +36,9 @@ export class Connection {
     }
   }
 
-  /** Report a failure that isn't tied to a running turn. */
-  fail(error: Failure, sessionId?: string): void {
-    this.send({ type: "error", payload: { sessionId, error } })
+  /** Report a failure to this client. */
+  fail(error: Failure): void {
+    this.send({ type: "error", payload: { error } })
   }
 
   /** The client is gone: stop anything still running on its behalf. */

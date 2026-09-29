@@ -1,5 +1,13 @@
 import z from "zod"
-import type { Failure, Notice } from "./errors"
+import type { Failure } from "./errors"
+import type {
+  ProviderSummary,
+  Skill,
+  SkillDestination,
+  SkillProblem,
+  SkillSource
+} from "./skills"
+
 
 export const WorkspaceCreatedSchema = z.object({
   id: z.string(),
@@ -7,33 +15,6 @@ export const WorkspaceCreatedSchema = z.object({
   path: z.string()
 })
 export type WorkspaceCreatedSchemaype = z.infer<typeof WorkspaceCreatedSchema>
-
-export const SessionCreated = z.object({
-  id: z.string(),
-  workspaceId: z.string(),
-  agentId: z.string()
-})
-export type SessionCreatedType = z.infer<typeof SessionCreated>
-
-/** A session's name changed. `null` means it was cleared back to derived. */
-export const SessionRenamed = z.object({
-  id: z.string(),
-  name: z.string().nullable()
-})
-export type SessionRenamedType = z.infer<typeof SessionRenamed>
-
-export const SessionDeleted = z.object({
-  id: z.string()
-})
-export type SessionDeletedType = z.infer<typeof SessionDeleted>
-
-export const MessageAdded = z.object({
-  id: z.string(),
-  sessionId: z.string(),
-  role: z.literal("user"),
-  message: z.string()
-})
-export type MessageAddedType = z.infer<typeof MessageAdded>
 
 /** One folder in a directory listing: somewhere to descend into, or to pick. */
 export type DirectoryEntry = {
@@ -45,7 +26,8 @@ export type DirectoryEntry = {
  * One level of the server's filesystem, for the folder picker. A browser
  * never reveals an absolute path — a folder input only exposes names
  * relative to whatever was chosen — and an absolute path is exactly what an
- * agent needs for its working directory, so the walking happens server-side.
+ * agent needs to look for a project's skills, so the walking happens
+ * server-side.
  */
 export type DirectoryListing = {
   /** The absolute path that was listed, resolved. */
@@ -56,162 +38,70 @@ export type DirectoryListing = {
   entries: DirectoryEntry[]
 }
 
-/**
- * One renderable piece of an assistant turn. A turn is an ordered list of
- * these: prose the model wrote, interleaved with the tools it ran.
- */
-export type TextBlock = {
-  kind: "text"
+/** A project this app knows about: somewhere its skills can be found. */
+export type Workspace = {
   id: string
-  text: string
-}
-
-export type ToolBlock = {
-  kind: "tool"
-  id: string
-  toolUseId: string
   name: string
-  input: unknown
-  result?: string
-  status: "running" | "done" | "error"
+  path: string
 }
-
-export type AssistantBlock = TextBlock | ToolBlock
-
-export type TurnStatus = "done" | "error" | "cancelled"
 
 export type OutgoingMessageType =
   | {
-      type: 'workspace-created'
-      payload: WorkspaceCreatedSchemaype
-    }
-  | {
-      type: 'session-created'
-      payload: SessionCreatedType
-    }
-  | {
-      type: 'session-renamed'
-      payload: SessionRenamedType
-    }
-  /** The session is gone, along with everything that was said in it. */
-  | {
-      type: 'session-deleted'
-      payload: SessionDeletedType
-    }
-  | {
-      type: 'message-added'
-      payload: MessageAddedType
-    }
-  | {
       type: 'init'
       workspaces: Workspace[]
-      /** The agents to choose between when starting a session. */
-      agents: AgentSummary[]
-  }
-  /** The agent picked up the turn. The client opens a live assistant message. */
-  | {
-      type: 'turn-started'
-      payload: { sessionId: string }
+      /** Every agent whose skills this server can read, and whether it can. */
+      providers: ProviderSummary[]
     }
-  /** A new prose block opened in the live turn. */
   | {
-      type: 'block-start'
-      payload: { sessionId: string; blockId: string; text: string }
-    }
-  /** Incremental text for an open prose block. */
-  | {
-      type: 'block-delta'
-      payload: { sessionId: string; blockId: string; text: string }
-    }
-  /** The model invoked a tool. Rendered immediately, before the result exists. */
-  | {
-      type: 'tool-start'
-      payload: {
-        sessionId: string
-        blockId: string
-        toolUseId: string
-        name: string
-        input: unknown
-      }
-    }
-  /** The tool returned. Resolves the matching tool-start. */
-  | {
-      type: 'tool-end'
-      payload: {
-        sessionId: string
-        toolUseId: string
-        result: string
-        isError: boolean
-      }
-    }
-  /** The turn finished. `id` is the persisted message id for the whole turn. */
-  | {
-      type: 'turn-ended'
-      payload: {
-        sessionId: string
-        id: string | null
-        status: TurnStatus
-        error?: Failure
-      }
-    }
-  /**
-   * Something happened mid-turn that the person should see but that doesn't
-   * end the turn — a retry after a hiccup, an allowance running low.
-   */
-  | {
-      type: 'notice'
-      payload: { sessionId: string; notice: Notice }
+      type: 'workspace-created'
+      payload: WorkspaceCreatedSchemaype
     }
   /** Answer to `list-directory`, for the folder picker. */
   | {
       type: 'directory-listed'
       payload: DirectoryListing
     }
-  /** Something failed outside a turn: a bad request, the database, us. */
+  /**
+   * Every skill in scope, deduplicated across agents. `workspaceId` is null
+   * when the listing covers only the skills that follow the person around.
+   */
+  | {
+      type: 'skills-listed'
+      payload: {
+        workspaceId: string | null
+        skills: Skill[]
+        /** `SKILL.md` files that wouldn't parse, named rather than dropped. */
+        problems: SkillProblem[]
+        /** Where a new skill may be written, and who would then see it. */
+        destinations: SkillDestination[]
+      }
+    }
+  /** Answer to `read-skill`: one file, as text and as parsed. */
+  | {
+      type: 'skill-read'
+      payload: SkillSource
+    }
+  /**
+   * A skill was written. Carries the saved source so the editor can settle
+   * onto exactly what is on disk — the server normalises what it is given.
+   * The skill itself arrives in the `skills-listed` that follows, because
+   * what a skill reaches is a question about the filesystem rather than
+   * about the write.
+   */
+  | {
+      type: 'skill-saved'
+      payload: {
+        source: SkillSource
+        /** True the first time, so the client can select it. */
+        created: boolean
+      }
+    }
+  | {
+      type: 'skill-deleted'
+      payload: { path: string }
+    }
+  /** Something failed: a bad request, the database, the filesystem, us. */
   | {
       type: 'error'
-      payload: { sessionId?: string; error: Failure }
+      payload: { error: Failure }
     }
-
-export type Workspace = {
-  id: string,
-  name: string,
-  path: string,
-  sessions: Session[]
-}
-
-export type Session = {
-  id: string,
-  /** The agent that runs this session's turns. Fixed when it was created. */
-  agentId: string,
-  /** The name the person gave it, or null to fall back to a derived title. */
-  name: string | null,
-  messages: Message[]
-}
-
-/** One agent a client may choose between. */
-export type AgentSummary = {
-  id: string
-  label: string
-}
-
-export type Message = {
-  id: string;
-  role: "user",
-  payload: {
-    message: string
-  }
-} | {
-  id: string;
-  role: "assistant",
-  payload: AssistantPayload
-}
-
-/**
- * What we persist for an assistant turn. `blocks` is the current shape;
- * the `result` shape predates streaming and is still read back from Mongo.
- */
-export type AssistantPayload =
-  | { type: "blocks"; blocks: AssistantBlock[] }
-  | { type: "result"; text: string }
-  | Record<string, unknown>

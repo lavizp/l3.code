@@ -28,13 +28,15 @@ export function NewSkillForm({
   }) => void
   onCancel: () => void
 }) {
-  const [scope, setScope] = useState<SkillScope>(destinations[0]?.scope ?? "user")
+  const [picked, setScope] = useState<SkillScope>(destinations[0]?.scope ?? "user")
   const [target, setTarget] = useState("shared")
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
 
   // Scopes in the order the server offered them, without repeating one.
   const scopes = [...new Set(destinations.map(d => d.scope))]
+  // Switching project while the form is open can take the choice away.
+  const scope = scopes.includes(picked) ? picked : (scopes[0] ?? picked)
   const forScope = destinations.filter(d => d.scope === scope)
   const chosen = forScope.find(d => d.target === target) ?? forScope[0]
   // The server enforces this too; saying it here means finding out before
@@ -57,37 +59,41 @@ export function NewSkillForm({
     >
       <h1 className="font-mono text-[14px] text-ink">New skill</h1>
 
-      <fieldset className="flex flex-col gap-1.5">
-        <legend className="pb-1 font-mono text-[11px] text-dim">How far it travels</legend>
-        {scopes.map(option => (
-          <label
-            key={option}
-            className={`flex cursor-pointer gap-2.5 rounded border px-3 py-2 ${
-              scope === option
-                ? "border-signal/40 bg-signal/5"
-                : "border-rule hover:bg-raised/50"
-            }`}
-          >
-            <input
-              type="radio"
-              name="scope"
-              className="mt-1 accent-signal"
-              checked={scope === option}
-              onChange={() => setScope(option)}
-            />
-            <span className="min-w-0">
-              <span className="block font-mono text-[12px] text-ink">
-                {option === "project" ? "This project only" : "Every project"}
+      {/* Only worth asking when there's more than one answer — in a project,
+          a new skill always goes into the repo. */}
+      {scopes.length > 1 && (
+        <fieldset className="flex flex-col gap-1.5">
+          <legend className="pb-1 font-mono text-[11px] text-dim">How far it travels</legend>
+          {scopes.map(option => (
+            <label
+              key={option}
+              className={`flex cursor-pointer gap-2.5 rounded border px-3 py-2 ${
+                scope === option
+                  ? "border-signal/40 bg-signal/5"
+                  : "border-rule hover:bg-raised/50"
+              }`}
+            >
+              <input
+                type="radio"
+                name="scope"
+                className="mt-1 accent-signal"
+                checked={scope === option}
+                onChange={() => setScope(option)}
+              />
+              <span className="min-w-0">
+                <span className="block font-mono text-[12px] text-ink">
+                  {option === "project" ? "This project only" : "Every project"}
+                </span>
+                <span className="mt-0.5 block text-[11px] leading-snug text-dim">
+                  {option === "project"
+                    ? "A file in the repo, so it travels with it."
+                    : "Kept in your home directory, so it follows you."}
+                </span>
               </span>
-              <span className="mt-0.5 block text-[11px] leading-snug text-dim">
-                {option === "project"
-                  ? "A file in the repo, so it travels with it."
-                  : "Kept in your home directory, so it follows you."}
-              </span>
-            </span>
-          </label>
-        ))}
-      </fieldset>
+            </label>
+          ))}
+        </fieldset>
+      )}
 
       <fieldset className="flex flex-col gap-1.5">
         <legend className="pb-1 font-mono text-[11px] text-dim">Who reads it</legend>

@@ -271,15 +271,33 @@ export function useSkillPane(): SkillPane {
     }
   }
 
+  const workspace = workspaces.find(w => w.id === workspaceId)
+
+  // A project view is about the project. The server lists everything each
+  // agent can see from inside it — personal skills, plugins, the agents' own
+  // — which is the honest answer to "what will the agent read here", but
+  // buries the handful that belong to the repo under dozens that don't. Those
+  // are one click away under Personal, so here only the repo's own are shown,
+  // and new skills are written into the repo.
+  const inProject = workspaceId !== null
+  const shownSkills = inProject ? skills.filter(s => s.scope === "project") : skills
+  const shownProblems =
+    inProject && workspace
+      ? problems.filter(p => isInside(workspace.path, p.path))
+      : problems
+  const shownDestinations = inProject
+    ? destinations.filter(d => d.scope === "project")
+    : destinations
+
   return {
     workspaces,
     workspaceId,
-    workspace: workspaces.find(w => w.id === workspaceId),
+    workspace,
     providers,
-    skills,
-    problems,
-    destinations,
-    selected: skills.find(s => s.id === selectedPath),
+    skills: shownSkills,
+    problems: shownProblems,
+    destinations: shownDestinations,
+    selected: shownSkills.find(s => s.id === selectedPath),
     source,
     loading,
     saving,
@@ -302,4 +320,10 @@ export function useSkillPane(): SkillPane {
     dismissError: () => setError(null),
     reconnect: socket.reconnect
   }
+}
+
+/** Whether `path` sits inside the folder `root`, not merely shares its prefix. */
+function isInside(root: string, path: string): boolean {
+  const base = root.endsWith("/") ? root : `${root}/`
+  return path.startsWith(base)
 }

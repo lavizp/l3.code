@@ -1,0 +1,52 @@
+# docker compose up -d --build, then open http://localhost:3000
+#
+# The backend reads and writes skills in your home directory and your
+# projects, so it sees them at the same paths the agents do: $HOME is mounted
+# at $HOME, and it runs as your user so what it writes is yours. Set UID/GID
+# in a .env beside this file if `id -u` isn't 1000.
+
+services:
+  backend:
+    build: .
+    image: l3code
+    working_dir: /app/apps/backend
+    command: ["bun", "index.ts"]
+    user: "${UID:-1000}:${GID:-1000}"
+    environment:
+      HOME: ${HOME}
+      DB_URL: mongodb://mongo:27017/l3code
+    volumes:
+      - ${HOME}:${HOME}
+    # No authentication on this port, and it can write your agents'
+    # instructions: localhost only.
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      - mongo
+    restart: unless-stopped
+
+  frontend:
+    # The backend's image; building it once is enough.
+    image: l3code
+    pull_policy: never
+    working_dir: /app/apps/frontend
+    command: ["bun", "src/index.ts"]
+    user: node
+    environment:
+      NODE_ENV: production
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped
+
+  # Holds the project list and nothing else. 7 rather than 8+: every later
+  # release refuses to start on Linux 6.19 and newer (SERVER-121912).
+  mongo:
+    image: mongo:7
+    volumes:
+      - mongo-data:/data/db
+    restart: unless-stopped
+
+volumes:
+  mongo-data:

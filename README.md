@@ -40,6 +40,42 @@ two rows. The `SKILL.md` is parsed once, centrally, after that grouping.
 
 ## Quick start
 
+With Docker, nothing else needs installing — Bun, MongoDB, and the Claude
+Code and Codex CLIs all come in the containers:
+
+```bash
+docker compose up -d --build
+```
+
+Open <http://localhost:3000>. Your personal skills are already listed; add a
+folder to see a project's.
+
+The backend container mounts your home directory at the same path it has on
+the host and runs as your user. Both matter: plugin manifests and skill
+symlinks hold absolute host paths, and a skill the pane writes should belong
+to you rather than root. Two consequences:
+
+- **Projects must live under your home directory**, because that's all the
+  container can see. Mount anything else into `backend` in
+  `docker-compose.yml` at its own path.
+- **If `id -u` isn't 1000**, put your IDs in a `.env` beside
+  `docker-compose.yml` before starting it:
+
+  ```bash
+  printf 'UID=%s\nGID=%s\n' "$(id -u)" "$(id -g)" > .env
+  ```
+
+The agents the pane reports as installed are the ones in the image, not on
+your machine. Codex's skill list comes from the image's `codex app-server`
+reading your `~/.codex`. It's installed at the latest version on every build,
+and you can pin it with `--build-arg CODEX_VERSION=…`. MongoDB is 7 rather than
+8 or later, because those refuse to start on Linux 6.19 and newer.
+
+`docker compose down` stops it. The project list is kept in the `mongo-data`
+volume.
+
+### Without Docker
+
 Prerequisites:
 
 - [Bun](https://bun.com) 1.4+ and Node 24+
